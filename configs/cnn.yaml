@@ -1,0 +1,35 @@
+# Model A: CNN from scratch on 22.05 kHz log-mels.
+run_name: cnn
+seed: 42
+
+data:
+  kind: mel              # datasets.MelDataset
+  subset: medium         # small | medium (--quick switches to small)
+  crop_frames: 431       # ~10 s training crop
+  eval_windows: 5        # 10 s windows, 5 s hop over the 30 s clip; probabilities averaged
+  augment:
+    gain_db: 6.0         # random gain in [-6, +6] dB
+    freq_masks: 2
+    freq_mask_width: 20
+    time_masks: 2
+    time_mask_width: 40
+
+model:
+  name: cnn
+  channels: [32, 64, 128, 256, 512]
+  dropout: [0.5, 0.3]
+
+train:
+  epochs: 30
+  early_stop_patience: 8         # epochs without val macro-F1 improvement
+  batch_size: 32
+  fallback_batch_sizes: [16]     # used if batch 32 runs out of memory
+  eval_batch_size: 16            # tracks per eval batch (x5 windows)
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  warmup_pct: 0.1                # OneCycle warmup fraction
+  amp: bf16                      # bf16 | fp16 (always mixed precision)
+  mixup_alpha: 0.2
+  label_smoothing: 0.1
+  class_weighting: inv_sqrt      # CE weights ∝ 1/sqrt(class frequency)
+  num_workers: 6

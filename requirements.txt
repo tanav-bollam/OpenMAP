@@ -1,0 +1,24 @@
+# Install the CUDA build of torch first, matching your driver, e.g.:
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu130
+torch
+torchaudio
+# MERT's remote code (trust_remote_code) was written for transformers 4.x;
+# under 5.x it silently returns no hidden states. Keep <5.
+transformers>=4.40,<5
+huggingface-hub<1.0
+accelerate
+nnAudio            # imported by MERT's remote code
+librosa
+soundfile>=0.12    # bundles libsndfile with MP3 support (no ffmpeg needed)
+imageio-ffmpeg     # bundled ffmpeg binary; demo falls back to it for WebM/Opus microphone recordings
+soxr
+numpy
+pandas
+scikit-learn
+pyyaml
+tqdm
+tensorboard
+matplotlib
+seaborn
+gradio>=5,<6       # gradio 6 requires huggingface-hub>=1.x, which conflicts with transformers 4.x
+umap-learn         # optional

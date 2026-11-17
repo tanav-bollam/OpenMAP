@@ -1,0 +1,38 @@
+# Model C: frozen MERT-v1-95M embeddings (precomputed by src/extract_mert.py)
+# -> learnable weighted layer sum -> small MLP.
+run_name: mert
+seed: 42
+
+data:
+  kind: embedding        # datasets.EmbeddingDataset, reads data/embeddings/{track_id}.npy
+  subset: medium
+
+mert:                    # used by extract_mert.py
+  checkpoint: m-a-p/MERT-v1-95M
+  revision: 12af15fef9d0ac838c3f475bfbbf26d2060dd4f5   # pinned remote code
+  sample_rate: 24000
+  chunk_seconds: 5
+  chunks_per_batch: 24   # 5 s chunks per forward pass (fits 6 GB in fp16)
+  dtype: fp16
+
+model:
+  name: mert_head
+  n_layers: 13           # embedding output + 12 transformer layers
+  dim: 768
+  hidden: 256
+  dropout: 0.3
+  layer_norm: false
+
+train:
+  epochs: 60
+  early_stop_patience: 15
+  batch_size: 128
+  eval_batch_size: 256
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  warmup_pct: 0.1
+  amp: bf16
+  mixup_alpha: 0.0
+  label_smoothing: 0.1
+  class_weighting: inv_sqrt
+  num_workers: 0         # embeddings are held in RAM

@@ -1,0 +1,37 @@
+# Model B: Audio Spectrogram Transformer -- PLACEHOLDER, not implemented yet (days 3-4).
+# To implement: add src/models/ast_model.py with @register("ast") (see src/models/__init__.py),
+# import it in models/__init__.py, and give the model a param_groups(cfg) method for the
+# backbone/head learning rates. Data already works: data.kind=wave resamples the 24 kHz
+# cache to 16 kHz on load (datasets.WaveDataset); the model should apply ASTFeatureExtractor
+# (or kaldi fbank + AST normalization) to the waveform batch inside forward().
+run_name: ast
+seed: 42
+
+data:
+  kind: wave
+  subset: medium
+  sample_rate: 16000     # AST expects 16 kHz
+  crop_seconds: 10.24    # AST input = 1024 frames x 10 ms
+  eval_windows: 3
+
+model:
+  name: ast
+  checkpoint: MIT/ast-finetuned-audioset-10-10-0.4593
+  gradient_checkpointing: true
+  lr_backbone: 1.0e-5
+  lr_head: 1.0e-3
+
+train:
+  epochs: 3
+  early_stop_patience: 3
+  batch_size: 8
+  fallback_batch_sizes: [4]
+  eval_batch_size: 4
+  lr: 1.0e-5
+  weight_decay: 1.0e-4
+  warmup_pct: 0.1
+  amp: bf16
+  mixup_alpha: 0.0
+  label_smoothing: 0.1
+  class_weighting: inv_sqrt
+  num_workers: 4

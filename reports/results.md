@@ -58,6 +58,29 @@ Official FMA test split, track level (window probabilities averaged).
 | Folk | Pop | 0.29 | 44 |
 | Pop | Electronic | 0.26 | 31 |
 
+## Model B: AST and the final comparison
+
+AST (fine-tuned AudioSet checkpoint) was trained for 3 epochs in two setups and evaluated once on test.
+Seed means for CNN (4) and MERT (5); AST rows are single runs. Full tables, paired bootstrap intervals and
+per-genre scores: [imbalance_and_uncertainty.md](imbalance_and_uncertainty.md).
+
+| Model | Runs | Top-1 acc | Macro-F1 | 95% CI of macro-F1 (test tracks) |
+|---|---|---|---|---|
+| CNN | 4 seeds | 0.673 ± 0.002 | 0.465 ± 0.005 | [0.441, 0.485] |
+| MERT + head | 5 seeds | 0.683 ± 0.004 | 0.496 ± 0.004 | [0.471, 0.517] |
+| AST, 8 layers frozen | 1 run | 0.708 | 0.538 | [0.505, 0.569] |
+| AST, full fine-tune | 1 run | 0.702 | 0.531 | [0.499, 0.559] |
+
+- AST beats MERT by +0.042 (95% CI 0.013 to 0.073; frozen setup) and +0.035 (0.008 to 0.063; full fine-tune), and the CNN
+  by +0.073 and +0.066. Full fine-tuning versus freezing 8 layers: −0.007 (−0.023 to 0.009), i.e. no measurable difference.
+- Where AST gains most over MERT (test F1, frozen setup): Country 0.60 vs 0.34, Classical 0.90 vs 0.80, Pop 0.39 vs 0.28,
+  and it is the only model with a non-zero Blues F1 (0.18; 8 test tracks). Easy Listening stays at 0.00 for every model.
+- Caveats: AST has one run per setting (seed variance unmeasured, and fine-tuned transformers can vary more than the
+  CNN/MERT seeds did), only 3 epochs were run (the brief asked for 10-15), and the validation numbers are 0.576 (frozen) and
+  0.573 (full) macro-F1, optimistic relative to test as for the other models.
+
+![AST confusion matrix (8 layers frozen)](figures/ast_confusion_test.png)
+
 ## Error analysis
 
 **Headline.** MERT (frozen embeddings + small head) beats the from-scratch CNN, but only modestly:
@@ -66,13 +89,23 @@ Gains are concentrated in Jazz (+0.15 F1), Hip-Hop (+0.07), International (+0.08
 and Country (+0.08). Both models are strong on Old-Time/Historic (0.94), Electronic, Rock, Hip-Hop and
 Classical (0.77-0.83), where the sound is distinctive and training data is plentiful.
 
-**Caveats on the comparison.** One seed per model and no confidence intervals. The rare genres have 6-42
-test tracks, so a few tracks move their F1 a lot, and a 0.033 macro-F1 gap is not clearly outside that
-noise. Validation macro-F1 for MERT (0.544) is higher than test (0.493): the best epoch was picked on a
-noisy validation metric, so validation scores are optimistic. Test numbers are the ones to quote.
-MERT's head also overfits (train acc ~0.79 vs ~0.71 val).
+**Caveats on the comparison (updated after the multi-seed runs,
+see [imbalance_and_uncertainty.md](imbalance_and_uncertainty.md)).** The tables above are the original single-seed
+runs (seed 42). Five MERT seeds give test macro-F1 0.496 ± 0.004 (accuracy 0.683 ± 0.004) and four CNN seeds give
+0.465 ± 0.005 (accuracy 0.673 ± 0.002), so seed noise is small for both. A paired bootstrap over the 2,572 test
+tracks, on the seed-averaged results, puts the MERT − CNN macro-F1 gap at **+0.031** (95% CI 0.010 to 0.050,
+MERT ahead in 100% of 2,000 resamples): the gap is about six times the seed-to-seed spread and its interval
+excludes zero. The rare genres have 6-42 test tracks, so their individual F1 scores stay noisy. Validation macro-F1 for MERT (0.542 ± 0.013 over seeds) is higher than test
+(0.496): the best epoch and configuration were picked on a noisy validation metric, so validation scores are
+optimistic. Test numbers are the ones to quote. MERT's head also overfits (train acc ~0.79 vs ~0.71 val).
 
-**Where the models fail, and likely reasons** (the causes are hypotheses; they were not tested):
+**Imbalance fixes did not help.** On validation (5 seeds each) the original recipe (loss weights ∝ 1/sqrt(freq))
+scored 0.542 ± 0.013 macro-F1. Class-balanced sampling (sqrt: 0.539 ± 0.009; full: 0.517 ± 0.006), no weighting
+(0.496 ± 0.002), full 1/freq weights (0.341 ± 0.006) and post-hoc prior correction (for both MERT and the
+CNN) did not beat it; stronger corrections over-predict rare genres and lower macro-F1. Blues and Easy
+Listening stay at 0.00 F1 for both models; Soul-RnB reaches 0.18 for MERT (mean of 5 seeds) and 0.04 for the CNN (mean of 4 seeds).
+
+**Where the models fail, and likely reasons.** The explanations below were written first; they are tested in the section after this list.
 
 1. **Rare genres are essentially not learned.** Blues (8 test tracks), Easy Listening (6) and Soul-RnB
    (42) score 0.00-0.08 F1 for both models. Training counts are 58, 13 and 94 tracks vs 5,681 for Rock,
@@ -91,6 +124,28 @@ MERT's head also overfits (train acc ~0.79 vs ~0.71 val).
 layers 5-7 together: 0.65) and is small for the first and last layers, so mid-level layers carry most of
 the genre information in this setup.
 
-**What would likely help (not done):** a weighted sampler or stronger class weights for the three
-smallest genres; merging or dropping genres with fewer than ~100 training tracks; several seeds and
-bootstrap confidence intervals; fine-tuning MERT or AST (planned for days 3-4).
+## Tests of these explanations
+
+Details and numbers: [error_analysis_tests.md](error_analysis_tests.md). Summary (each verdict refers only to the
+stated criterion; this is descriptive analysis of saved predictions, nothing was tuned on it):
+
+| Explanation | Test | Result |
+|---|---|---|
+| H1. Fewer training tracks, lower F1 | Spearman correlation of log training count and test F1 over 16 genres | **Supported:** rho 0.58 (MERT), 0.59 (CNN), p < 0.02. Scarcity matters. |
+| H2. Errors name another genre the track is also tagged with | Share of errors whose predicted genre is another top-level tag of the track | **Not testable:** every track in FMA-medium has exactly one top-level genre by construction (the subset keeps single-genre tracks), so this cannot support or refute label ambiguity. |
+| H3. Rare-genre tracks sit among other genres | 10 nearest training neighbours in MERT embedding space | **Consistent:** Soul-RnB, Blues and Easy Listening tracks have 0-1% same-genre neighbours (Soul-RnB: lift 2.0 over chance, mostly Rock neighbours), compared with 72% for Classical and Hip-Hop. |
+| H4. The confused pairs are hard to separate even with enough data | Class-balanced logistic regression on MERT embeddings, AUC on test | **Supported:** Instrumental vs Folk 0.75 (about 1,000 training tracks each), Pop vs Electronic 0.88, Soul-RnB vs Rock 0.67, against 0.998 for the distant control pairs. |
+| H5. Both models fail on the same tracks | Overlap of CNN and MERT errors | **Supported:** the models make mostly the same mistakes: 79% of the CNN's errors are also MERT errors and 81% of MERT's errors are also CNN errors, and on shared errors they predict the same wrong genre 70% of the time (13% expected by chance). |
+
+Reading the tests together: scarcity is part of the story (H1), but not all of it. Instrumental vs Folk is poorly
+separable (AUC 0.75) although both have about 1,000 training tracks, so genuine overlap between these labels exists
+independently of data quantity (H4). The CNN and MERT also fail on mostly the same tracks and, when both are wrong,
+predict the same wrong genre 70% of the time against 13% expected by chance (H5), which points to properties of the
+tracks or labels more than to model-specific weaknesses. What these tests cannot separate is noisy labels from
+real acoustic overlap, and the direct label-ambiguity test (H2) is impossible on this subset. One side effect: the
+single-genre selection probably makes FMA-medium labels cleaner than the full collection, so real-world ambiguity
+is likely understated here.
+
+**What would likely help (not done):** merging or dropping genres with fewer than ~100 training tracks, or
+collecting more data for them, since loss weighting, sampling and prior correction did not help (see above);
+using FMA's finer-grained sub-genre labels; fine-tuning MERT or AST.

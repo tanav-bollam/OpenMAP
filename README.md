@@ -1,28 +1,43 @@
-# Music genre recognition (FMA-medium): CNN vs MERT
+# Music genre recognition (FMA-medium): CNN vs MERT vs AST
 
-Predict the genre of a clip (up to 30 s) with top-3 probabilities. Two models are compared on the
+Predict the genre of a clip (up to 30 s) with top-3 probabilities. Three models are compared on the
 official, artist-separated FMA-medium test split:
 
 - **A. CNN from scratch** on 22.05 kHz log-mel spectrograms (4.98M parameters).
+- **B. Audio Spectrogram Transformer (AST)**, fine-tuned from the AudioSet checkpoint (86M parameters).
+  A reduced run (first 8 of 12 layers frozen) and a full fine-tune, both 3 epochs on a 6 GB laptop GPU.
 - **C. Frozen MERT-v1-95M embeddings** + a learnable layer-weighted sum and a small MLP head.
-- **B. AST** is intentionally not implemented yet (planned for later); the code is set up to add it
-  (see "Adding AST").
 
 ## Results (official test split, 2,572 tracks, track level)
 
-| Model | Top-1 acc | Top-3 acc | Macro-F1 | Weighted-F1 |
-|---|---|---|---|---|
-| A. CNN (from scratch) | 0.671 | 0.845 | 0.460 | 0.651 |
-| C. MERT + head | **0.682** | 0.846 | **0.493** | **0.680** |
+| Model | Runs | Top-1 acc | Macro-F1 |
+|---|---|---|---|
+| A. CNN (from scratch) | 4 seeds | 0.673 ± 0.002 | 0.465 ± 0.005 |
+| C. MERT + head | 5 seeds | 0.683 ± 0.004 | 0.496 ± 0.004 |
+| B. AST, 8 layers frozen | 1 run | **0.708** | **0.538** |
+| B. AST, full fine-tune | 1 run | 0.702 | 0.531 |
+
+Mean ± std over training seeds. Top-3 accuracy and weighted-F1 (seed 42 / single runs):
+CNN 0.845 / 0.651, MERT 0.846 / 0.680, AST (8 frozen) 0.862 / 0.701, AST (full) 0.856 / 0.695.
 
 Full per-genre table, confusion matrices and error analysis: [reports/results.md](reports/results.md).
 Per-run files are in `outputs/<run>/` (`classification_report_test.txt`, `confusion_test.png`, `metrics.csv`).
 
 Honest reading of the numbers:
-- MERT is better, but only modestly (one seed, no confidence intervals; rare genres have 6-42 test tracks).
-- Blues, Easy Listening and Soul-RnB are essentially not learned by either model (F1 0.00-0.08).
-  Training counts are 58, 13 and 94 tracks against 5,681 for Rock.
-- Validation macro-F1 is optimistic for MERT (0.544 val vs 0.493 test) because the best epoch was
+- AST is best, then MERT, then the CNN. Paired bootstrap over the test tracks (macro-F1): MERT − CNN +0.031
+  (95% CI 0.010 to 0.050), AST (8 frozen) − MERT +0.042 (0.013 to 0.073), AST (full) − MERT +0.035 (0.008 to 0.063).
+- AST is a single run per setting, so its seed-to-seed variance is unmeasured (the CNN and MERT seed spreads are
+  about 0.005). The intervals cover test-set sampling only. AST ran 3 epochs against the brief's 10-15, and
+  fine-tuning all layers made no measurable difference to freezing 8 (−0.007, 95% CI −0.023 to 0.009).
+- Blues, Easy Listening and Soul-RnB are essentially not learned by the CNN and MERT (F1 0.00-0.18); AST reaches
+  0.17-0.18 on Blues, but Easy Listening stays at 0.00 for every model (6 test tracks).
+  The explanations for the errors were tested ([reports/error_analysis_tests.md](reports/error_analysis_tests.md)):
+  scarcity matters, but genres with plenty of data (Instrumental vs Folk) also overlap, and both models make the
+  same mistakes; label ambiguity itself cannot be tested because FMA-medium keeps only single-genre tracks.
+  Training counts are 58, 13 and 94 tracks against 5,681 for Rock. Alternative loss weights, class-balanced
+  sampling and post-hoc prior correction did not improve validation macro-F1
+  (details: [reports/imbalance_and_uncertainty.md](reports/imbalance_and_uncertainty.md)).
+- Validation macro-F1 is optimistic for MERT (0.542 val vs 0.496 test) because configurations and epochs were
   picked on a noisy metric. Quote the test numbers.
 
 ## Reproduce
@@ -52,7 +67,16 @@ python src/train.py --config configs/cnn.yaml --quick     # 3 epochs on fma_smal
 python src/train.py --config configs/cnn.yaml             # Model A, ~75 min
 python src/extract_mert.py --config configs/mert.yaml     # ~30 min, resumable
 python src/train.py --config configs/mert.yaml            # Model C, ~1 min
-python src/evaluate.py outputs/cnn outputs/mert --umap    # writes reports/results.md
+python src/evaluate.py outputs/cnn outputs/mert --umap    # writes reports/results.md (overwrites it!)
+
+# Model B (AST): ~25 min/epoch with 8 layers frozen, ~40 min/epoch fully trainable (heat-throttled laptop GPU)
+python src/train.py --config configs/ast.yaml              # reduced: freeze_layers 8, 3 epochs, all training data
+python src/train.py --config configs/ast.yaml --set run_name=ast_full model.freeze_layers=0
+python src/evaluate.py outputs/ast outputs/ast_full --split test --no-report
+
+# extra analyses
+python src/sweep.py && python src/analyze_sweep.py --stage select && python src/analyze_sweep.py --stage final
+python src/error_analysis.py                              # tests of the error-analysis explanations
 
 python app/demo.py                                        # Gradio demo (best evaluated model)
 # Windows without activating the venv: .\.venv\Scripts\python app\demo.py   (or double-click run_demo.bat)
@@ -76,21 +100,24 @@ python app/demo.py                                        # Gradio demo (best ev
 - **MERT.** fp16, 5 s chunks, mean over time and chunks, 13 layers x 768. The code is pinned to
   `transformers<5` and a specific MERT code revision: under transformers 5.x the remote code returned no hidden states.
 
-## Adding AST (planned)
+## AST (implemented)
 
-1. Add `src/models/ast_model.py` with `@register("ast")`, import it in `src/models/__init__.py`.
-2. The model takes a waveform batch (`data.kind: wave`, 16 kHz crops via `WaveDataset`) and applies
-   `ASTFeatureExtractor` inside `forward()`; give it a `param_groups(cfg)` for backbone/head learning rates.
-3. Fill in `configs/ast.yaml` (placeholder), then `python src/train.py --config configs/ast.yaml`.
-   `evaluate.py` and the demo are model-agnostic through `build_model` and the checkpoint config.
-   (The demo needs a small branch for `data.kind: wave`.)
-
-AST fine-tuning is heavy for a 6 GB GPU (use gradient checkpointing, small batches, few epochs).
+`src/models/ast_model.py` registers `ast` in the model registry. It takes 16 kHz waveform crops
+(`data.kind: wave`, resampled from the 24 kHz cache by `WaveDataset`) and computes the filterbank features
+inside `forward()` on the GPU, verified identical to `transformers`' `ASTFeatureExtractor` (max abs diff 0.0).
+Settings in `configs/ast.yaml`: `MIT/ast-finetuned-audioset-10-10-0.4593`, 10.24 s crops, 3 evaluation windows,
+head lr 1e-3, backbone lr 1e-5, bf16, batch 8, non-reentrant gradient checkpointing (required so the trainable
+layers get gradients when early layers are frozen), same class-weighted label-smoothed loss as the other models.
+`scripts/time_ast.py` measures the step time and picks a time-budgeted setup; real epochs took about 1.65x the
+cool-GPU estimate because of heat throttling. The demo serves it through a `wave` branch.
 
 ## Lessons learned
 
-- A from-scratch CNN gets surprisingly close to frozen pretrained embeddings on FMA genres; label noise
-  and class imbalance limit both, more than model capacity does.
+- A from-scratch CNN gets surprisingly close to frozen pretrained embeddings on FMA genres, and a fine-tuned
+  AudioSet transformer is better again; label noise and class imbalance limit all three, more than model
+  capacity does (rare genres stay near zero F1 for every model).
+- Freezing 8 of AST's 12 layers made no measurable difference over 3 epochs and was ~1.6x faster.
+- A short timing test on a cool GPU underestimated real epoch time by 1.65x on this laptop.
 - Rare classes dominate macro-F1 and are the least reliable part of the evaluation.
 - On Windows (spawn), idle persistent DataLoader workers each hold ~0.6 GB; on a 15 GB machine this
   slowed training until validation workers were capped at 2 and made non-persistent.
@@ -99,7 +126,7 @@ AST fine-tuning is heavy for a 6 GB GPU (use gradient checkpointing, small batch
 ## Layout
 
 ```
-configs/  cnn.yaml mert.yaml ast.yaml(placeholder)     src/  data, models, train, evaluate, extract_mert
+configs/  cnn.yaml mert.yaml ast.yaml                 src/  data, models, train, evaluate, extract_mert
 app/demo.py  Gradio demo                               reports/results.md  comparison + error analysis
 scripts/run_overnight.sh  end-to-end chain             data/ outputs/ logs/  (gitignored)
 ```

@@ -29,13 +29,27 @@ from models import build_model
 from utils import OUTPUTS, default_num_workers, load_config, load_genres, load_splits, seed_everything
 
 
+def subsample_training(df, fraction: float, seed: int):
+    """Keep a stratified `fraction` of each class in the TRAINING split (validation/test untouched)."""
+    import pandas as pd
+
+    parts = [g.sample(n=max(1, round(len(g) * fraction)), random_state=seed)
+             for _, g in df[df.split == "training"].groupby("label")]
+    return pd.concat(parts + [df[df.split != "training"]]).reset_index(drop=True)
+
+
 def make_loaders(cfg, df, batch_size):
     t = cfg["train"]
     nw = t.get("num_workers", default_num_workers())
     train_ds = build_dataset(cfg, df[df.split == "training"], train=True)
     val_ds = build_dataset(cfg, df[df.split == "validation"], train=False)
-    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, drop_last=True,
-                          num_workers=nw, pin_memory=True, persistent_workers=nw > 0)
+    # Optional class-balanced sampling (train.sampler: none | sqrt | inv). Use it INSTEAD of loss
+    # weights (class_weighting: none) so the imbalance correction is not applied twice.
+    sw = engine.sample_weights(train_ds.labels, len(load_genres(cfg["data"]["subset"])), t.get("sampler", "none"))
+    sampler = (torch.utils.data.WeightedRandomSampler(torch.from_numpy(sw), num_samples=len(sw), replacement=True)
+               if sw is not None else None)
+    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=sampler is None, sampler=sampler,
+                          drop_last=True, num_workers=nw, pin_memory=True, persistent_workers=nw > 0)
     # Validation workers are NOT persistent and capped at 2: on Windows (spawn) each idle
     # persistent worker holds ~0.6 GB, which starved the OS page cache on a 15 GB machine.
     vw = min(nw, t.get("val_num_workers", 2))
@@ -101,6 +115,10 @@ def main() -> None:
 
     subset = cfg["data"]["subset"]
     df = load_splits(subset)
+    frac = float(cfg["data"].get("train_fraction", 1.0))
+    if frac < 1.0:
+        df = subsample_training(df, frac, cfg.get("seed", 42))
+        print(f"using a stratified {frac:.0%} of the training split: {(df.split == 'training').sum()} tracks")
     genres = load_genres(subset)
     n_classes = len(genres)
     t = cfg["train"]

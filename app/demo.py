@@ -100,6 +100,8 @@ class Predictor:
         elif self.kind == "embedding":
             from extract_mert import load_mert
             self.mert = load_mert(self.cfg["mert"], DEVICE).half()
+        elif self.kind == "wave":
+            pass  # e.g. AST: the model computes its own features from 16 kHz waveform windows
         else:
             raise SystemExit(f"demo does not support data.kind={self.kind!r}")
 
@@ -117,6 +119,18 @@ class Predictor:
             starts = audio.window_starts(mel.shape[1], crop, n_win)
             x = np.stack([mel[:, s:s + crop] for s in starts])
             x = torch.from_numpy((x - self.mean) / self.std)[:, None].to(DEVICE)
+            with torch.autocast(DEVICE.type, dtype=torch.bfloat16, enabled=DEVICE.type == "cuda"):
+                probs = torch.softmax(self.model(x).float(), -1).mean(0)
+        elif self.kind == "wave":
+            d = self.cfg["data"]
+            sr_t = d["sample_rate"]
+            yw = audio.resample(y, sr, sr_t)
+            crop = int(d.get("crop_seconds", 10.0) * sr_t)
+            if len(yw) < crop:
+                yw = np.pad(yw, (0, crop - len(yw)))
+            n_win = max(1, int(round((len(yw) - crop) / (5 * sr_t))) + 1)
+            starts = audio.window_starts(len(yw), crop, n_win)
+            x = torch.from_numpy(np.stack([yw[s:s + crop] for s in starts])).to(DEVICE)
             with torch.autocast(DEVICE.type, dtype=torch.bfloat16, enabled=DEVICE.type == "cuda"):
                 probs = torch.softmax(self.model(x).float(), -1).mean(0)
         else:

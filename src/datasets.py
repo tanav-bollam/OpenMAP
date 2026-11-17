@@ -69,13 +69,33 @@ class MelDataset(Dataset):
 
 # ------------------------------------------------------------- embeddings (Model C)
 
+def load_embeddings(track_ids: np.ndarray) -> np.ndarray:
+    """float32 [N, n_layers, dim] for the given track ids.
+
+    Reads data/embeddings/*.npy once and caches everything in two files (data/embeddings_all.npy and
+    data/embeddings_all_ids.npy) so later runs skip ~25k small file reads. Delete both files if the
+    embeddings are ever re-extracted; the cache also rebuilds itself if an id is missing from it."""
+    mat_path, ids_path = EMB_DIR.parent / "embeddings_all.npy", EMB_DIR.parent / "embeddings_all_ids.npy"
+    if mat_path.exists() and ids_path.exists():
+        ids = np.load(ids_path)
+        row = {int(t): i for i, t in enumerate(ids)}
+        if all(int(t) in row for t in track_ids):
+            mat = np.load(mat_path, mmap_mode="r")
+            return np.stack([mat[row[int(t)]] for t in track_ids]).astype(np.float32)
+    ids = np.array(sorted(int(p.stem) for p in EMB_DIR.glob("*.npy")), dtype=np.int64)
+    mat = np.stack([np.load(EMB_DIR / f"{t}.npy") for t in ids]).astype(np.float32)
+    np.save(mat_path, mat)
+    np.save(ids_path, ids)
+    row = {int(t): i for i, t in enumerate(ids)}
+    return mat[[row[int(t)] for t in track_ids]]
+
+
 class EmbeddingDataset(Dataset):
     """Precomputed per-track MERT embeddings (n_layers, 768), held in RAM."""
 
     def __init__(self, df, subset: str, train: bool, cfg: dict):
         self.labels = df.label.to_numpy()
-        self.x = torch.from_numpy(np.stack(
-            [np.load(EMB_DIR / f"{t}.npy") for t in df.track_id]).astype(np.float32))
+        self.x = torch.from_numpy(load_embeddings(df.track_id.to_numpy()))
         self.train = train
 
     def __len__(self):

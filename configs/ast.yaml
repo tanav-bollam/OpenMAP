@@ -1,23 +1,24 @@
-# Model B: Audio Spectrogram Transformer -- PLACEHOLDER, not implemented yet (days 3-4).
-# To implement: add src/models/ast_model.py with @register("ast") (see src/models/__init__.py),
-# import it in models/__init__.py, and give the model a param_groups(cfg) method for the
-# backbone/head learning rates. Data already works: data.kind=wave resamples the 24 kHz
-# cache to 16 kHz on load (datasets.WaveDataset); the model should apply ASTFeatureExtractor
-# (or kaldi fbank + AST normalization) to the waveform batch inside forward().
+# Model B: Audio Spectrogram Transformer, REDUCED fine-tune for a 6 GB laptop GPU.
+# Full fine-tuning (all 12 layers, 10-15 epochs) would take ~10-20 h here, so this setup freezes the
+# embeddings + first `freeze_layers` transformer layers, uses gradient checkpointing, a small batch and
+# a stratified fraction of the training split. Adjust `data.train_fraction` / `train.epochs` after
+# measuring the step time (see DECISIONS_AND_CONCERNS.md).
 run_name: ast
 seed: 42
 
 data:
-  kind: wave
+  kind: wave             # datasets.WaveDataset: 24 kHz cache resampled to 16 kHz on load
   subset: medium
   sample_rate: 16000     # AST expects 16 kHz
   crop_seconds: 10.24    # AST input = 1024 frames x 10 ms
-  eval_windows: 3
+  eval_windows: 3        # 3 windows over the 30 s clip, probabilities averaged
+  train_fraction: 1.0    # stratified fraction of the training split
 
 model:
   name: ast
   checkpoint: MIT/ast-finetuned-audioset-10-10-0.4593
   gradient_checkpointing: true
+  freeze_layers: 8       # freeze patch embedding + first 8 of 12 transformer layers
   lr_backbone: 1.0e-5
   lr_head: 1.0e-3
 
@@ -26,12 +27,13 @@ train:
   early_stop_patience: 3
   batch_size: 8
   fallback_batch_sizes: [4]
-  eval_batch_size: 4
+  eval_batch_size: 4     # tracks per eval batch (x3 windows)
   lr: 1.0e-5
   weight_decay: 1.0e-4
   warmup_pct: 0.1
   amp: bf16
   mixup_alpha: 0.0
   label_smoothing: 0.1
-  class_weighting: inv_sqrt
-  num_workers: 4
+  class_weighting: inv_sqrt   # same recipe as the CNN and MERT head
+  num_workers: 3         # RAM is tight (15 GB shared with CNN runs)
+  val_num_workers: 2

@@ -16,3 +16,11 @@ Scope per user: CNN (A) vs MERT (C). AST skipped (code is pluggable; configs/ast
 
 ## Overnight chain launched
 `scripts/run_overnight.sh` (log: logs/overnight.log) runs M4 -> M5 -> M6 -> final eval. Re-run it if it stops; each step is resumable.
+
+- [x] Todo item 1 (imbalance + seeds + CIs): done 2026-11-17, see reports/imbalance_and_uncertainty.md
+
+## Autonomous run 2 (started 2026-11-17): user asked for CNN seeds, then housekeeping, error-analysis tests, AST
+- [x] T1 CNN extra seeds done (4 seeds: test macro-F1 0.465 ± 0.005, acc 0.673 ± 0.002); MERT-CNN gap +0.031, 95% CI [0.010, 0.050] (reports/imbalance_and_uncertainty.md)
+- [x] T2 Housekeeping done: quick runs + debug logs deleted; zips intentionally kept (see decisions)
+- [x] T3 Error-analysis tests done: H1,H3,H4,H5 supported/consistent, H2 not testable (single-genre subset); see reports/error_analysis_tests.md
+- [x] T4 AST done: reduced (8 layers frozen) test acc 0.708 / macro-F1 0.538; full fine-tune acc 0.702 / 0.531; demo tested; docs updated (reports/results.md, README)

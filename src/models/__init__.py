@@ -41,4 +41,4 @@ def build_model(cfg: dict, n_classes: int) -> nn.Module:
 
 
 # Import model modules so they register themselves.
-from . import cnn, mert_head  # noqa: E402,F401
+from . import ast_model, cnn, mert_head  # noqa: E402,F401

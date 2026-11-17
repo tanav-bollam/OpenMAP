@@ -17,12 +17,29 @@ def amp_dtype(cfg: dict) -> torch.dtype:
 
 
 def class_weights(labels: np.ndarray, n_classes: int, mode: str) -> torch.Tensor | None:
-    """Weights ∝ 1/sqrt(freq), normalized to mean 1 over classes."""
+    """Loss weights, normalized to mean 1 over classes.
+
+    mode: none | inv_sqrt (weights ∝ 1/sqrt(freq), the default) | inv (weights ∝ 1/freq)."""
     if mode in (None, "none"):
         return None
+    powers = {"inv_sqrt": 0.5, "inv": 1.0}
+    if mode not in powers:
+        raise ValueError(f"unknown class_weighting {mode!r}; options: none, {', '.join(powers)}")
     counts = np.bincount(labels, minlength=n_classes).astype(np.float64)
-    w = 1.0 / np.sqrt(np.maximum(counts, 1))
+    w = 1.0 / np.maximum(counts, 1) ** powers[mode]
     return torch.tensor(w / w.mean(), dtype=torch.float32)
+
+
+def sample_weights(labels: np.ndarray, n_classes: int, mode: str) -> np.ndarray | None:
+    """Per-example sampling weights for a WeightedRandomSampler: none | sqrt | inv
+    (class sampling probability ∝ freq^0.5 or freq^0, i.e. examples weighted 1/sqrt(freq) or 1/freq)."""
+    if mode in (None, "none"):
+        return None
+    powers = {"sqrt": 0.5, "inv": 1.0}
+    if mode not in powers:
+        raise ValueError(f"unknown sampler {mode!r}; options: none, {', '.join(powers)}")
+    counts = np.bincount(labels, minlength=n_classes).astype(np.float64)
+    return (1.0 / np.maximum(counts, 1) ** powers[mode])[labels]
 
 
 def to_device(x, device):

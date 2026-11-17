@@ -125,3 +125,72 @@ Morning report for the autonomous run. Newest entries at the bottom.
 - **How to change it:** Make public: `gh repo edit tanav-bollam/OpenMAP --visibility public --accept-visibility-change-consequences`. Rename: `gh repo rename`. Add a license: add a LICENSE file and commit. Change commit email for future commits: `git config user.email ...` in the repo.
 - **Not uploaded:** model checkpoints (`outputs/*/best.pt`), caches, FMA audio/metadata. The MERT head checkpoint is small (~1 MB) and could be added if wanted.
 - **Concern level:** low
+
+## [2026-11-17] Item 1 done: imbalance sweep + uncertainty (no fix helped)
+- **Situation:** Todo item 1: try imbalance fixes, run multiple seeds, add confidence intervals.
+- **Decision / action taken:** Added `class_weighting: inv`, `train.sampler` (none|sqrt|inv), a single-file embedding cache (data/embeddings_all*.npy; delete both if embeddings are re-extracted), `src/sweep.py` and `src/analyze_sweep.py`. Ran 5 MERT-head variants x 5 seeds (25 runs, 0 failures, ~3-4 min each) and post-hoc prior correction (tau 0..1) for MERT and the CNN. Selection used VALIDATION only; the test split was read once for the five original-recipe seeds (stage `final`).
+- **Result:** The original recipe (loss weights 1/sqrt(freq), no correction) won on validation (0.542 ± 0.013); no variant or tau beat it. Test, original recipe, 5 seeds: macro-F1 0.496 ± 0.004, acc 0.683 ± 0.004. CNN (1 seed) 0.460, 95% CI [0.435, 0.482]. Paired bootstrap MERT − CNN macro-F1: +0.035, 95% CI [0.013, 0.057], 100% of 2,000 resamples > 0. Rare genres unchanged (Blues, Easy Listening 0.00; Soul-RnB 0.18 MERT vs 0.00 CNN).
+- **Corrected earlier claims:** results.md/README said the gap "may be noise" and "one seed, no CI"; updated. Remaining caveat: CNN seed variance is unmeasured (one seed).
+- **Concerns:** (1) 25 configs compared on validation, so the winning validation score is optimistic (val 0.542 vs test 0.496). (2) The CI covers test-track sampling only, not CNN training variance. (3) Did not rerun the CNN with a fix, because no fix helped. Optional: 2-4 more CNN seeds (~75 min each) to close caveat 2. (4) Files changed but NOT committed or pushed.
+- **How to change it:** `python src/sweep.py --variants ... --seeds ...`; `python src/analyze_sweep.py --stage select|final`.
+- **Concern level:** low
+
+## [2026-11-17] Housekeeping (T2) done conservatively
+- **Situation:** User asked for housekeeping (delete quick-test runs and debug logs, optionally the FMA zips).
+- **Decision / action taken:** Deleted `outputs/cnn_quick`, `outputs/mert_quick` and my debug/test logs (`logs/browser*.log`, `crawl*.log`, `demo*.log`, `cnn_quick.log`, `overnight_attempt1.log`), about 0.5 MB plus 21 MB of outputs. Kept all training/sweep/analysis logs and every result. **Did NOT delete** `data/raw/zips/*` (~30 GB), `data/raw/fma_*` or any cache.
+- **Why:** The autonomous-run safety rules say never delete raw data while the user is away, and the zips are the only local copy of the verified downloads (re-downloadable, but slow). Everything I deleted is regenerable in minutes.
+- **How to change it:** To free ~30 GB yourself once you are sure the extracted audio is complete: `rm data/raw/zips/fma_small.zip data/raw/zips/fma_medium.zip data/raw/zips/fma_metadata.zip`.
+- **Concern level:** low
+
+## [2026-11-17 03:35] Plan and design decisions for CNN seeds, error-analysis tests and AST
+- **Situation:** User asked for 2-4 more CNN seeds, then housekeeping, error-analysis tests and AST, run autonomously.
+- **Decision / action taken:**
+  - **CNN seeds:** 3 extra seeds (1, 2, 3) with the unchanged recipe via `scripts/run_cnn_seeds.sh` (log `logs/cnn_seeds.log`, ~80 min each), each evaluated on validation and test; with the original seed 42 that makes 4 seeds. Pre-flight was a 3-epoch quick run on fma_small (passed: val macro-F1 0.443).
+  - **Chain 2** (`scripts/run_after_cnn.sh`, log `logs/after_cnn.log`) starts when the seeds finish: re-run `analyze_sweep.py --stage final` (now uses all CNN seeds), re-run `error_analysis.py`, then AST.
+  - **Error-analysis tests** (`src/error_analysis.py` -> `reports/error_analysis_tests.md`): 5 tests (scarcity, label ambiguity via multi-tag, kNN overlap, pairwise separability, shared errors). **H2 (multi-tag) is not testable**: all 25,000 FMA-medium tracks have exactly one top-level genre by construction (verified; 54,745 of 106,574 tracks in the full FMA have several), so I report it as 'not testable' instead of 'not supported'.
+  - **AST** (`src/models/ast_model.py`, `configs/ast.yaml`): HF checkpoint `MIT/ast-finetuned-audioset-10-10-0.4593`; GPU feature extraction verified identical to `ASTFeatureExtractor` (max abs diff 0.0); non-reentrant gradient checkpointing (needed so trainable layers get gradients when early layers are frozen; verified on CPU); embeddings + first 8 of 12 layers frozen (33% of 86M parameters trainable); head lr 1e-3, backbone lr 1e-5; same loss recipe as the other models. **This is a reduced fine-tune, not the full 10-15 epoch recipe from the brief.** `scripts/time_ast.py` measures the real step time and picks `data.train_fraction` (stratified) so that 3 epochs + validation fit an `AST_BUDGET_HOURS` budget (default 3 h, floor 10%).
+  - **Demo:** added a `wave` branch in `app/demo.py` so the AST run can be served.
+- **Why:** Memory is tight (15 GB), so nothing GPU-heavy runs alongside the CNN; everything is chained to run in sequence, detached, and each step is resumable or re-runnable.
+- **How to change it:** `AST_BUDGET_HOURS=6 bash scripts/run_after_cnn.sh` (or edit `configs/ast.yaml`: `freeze_layers`, `epochs`, `train_fraction`); more CNN seeds: edit the `for seed in ...` line in `scripts/run_cnn_seeds.sh`.
+- **Not done on purpose:** no `git commit`/`push` (safety rules for unattended runs); raw zips kept.
+- **Concern level:** medium (AST is untested on GPU until the CNN finishes; if it fails the chain logs it and stops AST only)
+
+## [2026-11-17 08:10] T1 (CNN seeds) and T3 (error-analysis tests) finished
+- **Situation:** 3 extra CNN seeds finished at 08:09 (about 95 min each, slower than the first run because of laptop heat, GPU ~84 C / 1770 MHz).
+- **Result:** CNN test macro-F1 per seed 0.460 (seed 42), 0.461, 0.470, 0.468 -> 0.465 ± 0.005 (accuracy 0.673 ± 0.002). With 5 MERT seeds (0.496 ± 0.004) the paired-bootstrap MERT − CNN gap is +0.031 (95% CI 0.010 to 0.050; MERT ahead in 100% of resamples). The earlier open caveat (CNN seed variance unmeasured) is closed: seed spread is ~6x smaller than the gap.
+- **Error-analysis tests** (reports/error_analysis_tests.md): H1 scarcity supported (rho 0.58/0.59, p<0.02); H2 label ambiguity NOT TESTABLE (all FMA-medium tracks have exactly one top-level genre by construction); H3 rare genres have 0-1% same-genre neighbours (consistent with dispersion/overlap); H4 confused pairs poorly separable even with plenty of data (Instrumental vs Folk AUC 0.75 vs 0.998 for control pairs); H5 models share 79-81% of errors and agree on the wrong label 70% of the time (13% by chance). Interpretation kept careful in results.md: these tests cannot separate noisy labels from real acoustic overlap.
+- **Docs updated:** reports/results.md (caveats, tests table), README, reports/imbalance_and_uncertainty.md (regenerated with 4 CNN seeds).
+- **Concern level:** low
+
+## [2026-11-17 08:12] AST is much faster than estimated: queued a full fine-tune as a second run
+- **Situation:** `scripts/time_ast.py` measured 0.31 s per batch of 8 with 8 layers frozen + gradient checkpointing + bf16 (26 samples/s, peak 1.2 GB GPU), i.e. ~13 min per full epoch over 19,904 training tracks (my earlier estimate was 1-2 h per epoch). The time budget therefore chose train_fraction = 1.0 and the whole reduced run is estimated at ~0.8 h.
+- **Decision / action taken:** Chain 2 continues unchanged and trains the reduced AST (`outputs/ast`: first 8 layers frozen, 3 epochs, 100% of the training data). Added `scripts/run_ast_full.sh`, which waits for chain 2 and then times a FULL fine-tune (`AST_FREEZE=0`), picks 3-8 epochs that fit `AST_BUDGET_HOURS` (default 3), and trains `outputs/ast_full`. Having both gives a free ablation of freezing vs full fine-tuning, and the full run is closer to the brief's recipe (the brief asked for 10-15 epochs; the budget will allow fewer).
+- **Why:** The measurements show the reduced setup does not need to be so reduced; a better-quality AST is more informative for the CNN/MERT/AST comparison, and the cost is only GPU time.
+- **How to change it:** `AST_BUDGET_HOURS=6 bash scripts/run_ast_full.sh` for more epochs (max 8 in the script); `configs/ast.yaml` for learning rates, `freeze_layers`.
+- **Concern level:** low (if the full run OOMs, `train.py` falls back to batch 4 automatically; failures are logged in logs/ast_full_chain.log and do not affect other results)
+
+## [2026-11-17 08:40] AST timing corrected for heat throttling
+- **Situation:** Reduced AST run epoch 1 took 1528 s (val acc 0.722, macro-F1 0.549) vs 926 s predicted by `time_ast.py` (cool-GPU step time). Real epochs are 1.65x slower (GPU 84-88 C, clock ~1400-1760 MHz of 2100).
+- **Decision / action taken:** `scripts/time_ast.py` now multiplies timings by `AST_SLOWDOWN` (default 1.65) before choosing the number of epochs for the full fine-tune. The reduced run is unaffected (it finishes ~09:30).
+- **How to change it:** `AST_SLOWDOWN=1.0` or `AST_BUDGET_HOURS=...` environment variables when launching `scripts/run_ast_full.sh`.
+- **Concern level:** low. Note the first AST epoch already beats the MERT head on validation macro-F1 (0.549 vs 0.542); the test numbers will decide the comparison.
+
+## [2026-11-17 09:40] AST (reduced fine-tune) result; demo verified with AST
+- **Result (outputs/ast, seed 42, 8 layers frozen, 3 epochs, 100% of the training data, 1528 s/epoch):** best val macro-F1 0.576 (epoch 3, val acc 0.729). **Test: acc 0.708, top-3 0.862, macro-F1 0.538, weighted-F1 0.701.** Paired bootstrap on test macro-F1: AST − MERT = +0.042 (95% CI 0.013 to 0.073), AST − CNN = +0.073 (0.042 to 0.102). First non-zero Blues F1 (0.18); Country 0.60 (MERT 0.34); Easy Listening still 0.00.
+- **Caveats:** AST is ONE run (seed variance unmeasured; MERT/CNN seed std was ~0.005, fine-tuned transformers can vary more); the test intervals cover test-track sampling only; only 3 epochs (the brief asked for 10-15) and lower layers frozen, so this probably understates what AST can do.
+- **Demo:** `python app/demo.py` now auto-picks the run with the best test macro-F1, which is now `ast`. Verified through the Predictor: correct top-3 on a Hip-Hop track, a WebM recording, a 0.5 s clip, silence (finite, sums to 1) and a 45 s clip. The full web UI was not re-tested in a browser with AST.
+- **Next:** full fine-tune `ast_full` (all layers, 3 epochs, est. ~47 min/epoch; ETA ~12:10), then re-run `analyze_sweep.py --stage final` and update the docs.
+- **Concern level:** low
+
+## [2026-11-17 11:55] T4 (AST) finished: full fine-tune result and final comparison
+- **Result:** full fine-tune (`outputs/ast_full`, all layers trainable, 3 epochs, ~40 min/epoch): best val macro-F1 0.573, **test acc 0.702, top-3 0.856, macro-F1 0.531**. Reduced run (`outputs/ast`): test acc 0.708, macro-F1 0.538. Difference full − reduced −0.007 (95% CI −0.023 to 0.009): no measurable gain from unfreezing in 3 epochs.
+- **Final ranking (test macro-F1):** AST 0.531-0.538 > MERT 0.496 ± 0.004 (5 seeds) > CNN 0.465 ± 0.005 (4 seeds). Paired-bootstrap gaps: AST − MERT +0.035 to +0.042 (CIs exclude 0), MERT − CNN +0.031.
+- **Docs updated:** README (three-model table, AST section, lessons), reports/results.md (new AST section, AST confusion figure in reports/figures), reports/imbalance_and_uncertainty.md (regenerated). `evaluate.py outputs/... ` without `--no-report` would OVERWRITE reports/results.md (it regenerates it from scratch) - do not run it without backing up the manual sections.
+- **Open caveats:** (1) AST is a single run per setting; seed variance unmeasured. (2) 3 epochs, not the brief's 10-15. (3) Easy Listening is 0.00 for all models (6 test tracks). (4) The demo web UI with AST was not re-tested in a browser (the Predictor path was). (5) The GPU is heat-throttled (84-88 C), so timings in the docs are for this laptop.
+- **Concern level:** low
+
+## Final summary (autonomous run 2)
+- **Summary:** All four tasks finished. CNN seeds (4 total: 0.465 ± 0.005 macro-F1), housekeeping (test artifacts and debug logs removed; raw zips kept), error-analysis tests (H1, H3, H4, H5 supported/consistent; H2 not testable on single-genre FMA-medium), AST (best model: test macro-F1 0.538, acc 0.708).
+- **Still running:** nothing. All chains finished (logs/cnn_seeds.log, logs/after_cnn.log, logs/ast_full_chain.log).
+- **Needs your attention:** (1) Nothing is committed or pushed: `git status` shows many modified and new files (new scripts, AST model, reports, docs). Say the word and I will commit and push to the private repo. (2) Output directory sizes: `outputs/` now holds CNN (x4), MERT sweep (25 runs), AST (x2) checkpoints (1.1 GB in total). (3) Free ~30 GB by deleting `data/raw/zips/*` if you no longer need the zips.
+- **Next steps:** run more seeds of AST (~75 min per 3-epoch run), try 10-15 epochs for AST as in the brief, or compare against MERT fine-tuning; decide whether to merge/drop the rare genres (Blues, Easy Listening, Soul-RnB), the one issue every model shares.

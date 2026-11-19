@@ -194,3 +194,32 @@ Morning report for the autonomous run. Newest entries at the bottom.
 - **Still running:** nothing. All chains finished (logs/cnn_seeds.log, logs/after_cnn.log, logs/ast_full_chain.log).
 - **Needs your attention:** (1) Nothing is committed or pushed: `git status` shows many modified and new files (new scripts, AST model, reports, docs). Say the word and I will commit and push to the private repo. (2) Output directory sizes: `outputs/` now holds CNN (x4), MERT sweep (25 runs), AST (x2) checkpoints (1.1 GB in total). (3) Free ~30 GB by deleting `data/raw/zips/*` if you no longer need the zips.
 - **Next steps:** run more seeds of AST (~75 min per 3-epoch run), try 10-15 epochs for AST as in the brief, or compare against MERT fine-tuning; decide whether to merge/drop the rare genres (Blues, Easy Listening, Soul-RnB), the one issue every model shares.
+
+## [2026-11-17] Priority AST run prepared but not started (user will run it tonight)
+- **Decision / action taken:** Wrote `scripts/run_ast_seeds.sh` and `run_ast_seeds.bat` (2 extra seeds of the reduced AST recipe, one 10-epoch run with early-stop patience 4, then the final analysis). Updated `src/analyze_sweep.py` so that AST seeds `outputs/ast_s*` are pooled with `outputs/ast` (seed mean ± std) and `outputs/ast_e10` is its own row; dry-run on the current results passes. Estimated ~7 h total (~1h25 per 3-epoch run, ~4h20 for 10 epochs). Saved as a memory item.
+- **Why:** The user asked to keep this as the priority item. Answers whether AST's lead over MERT (+0.035 to +0.042 macro-F1, single run) is real, and what a longer run gives.
+- **Concern level:** low. These changes are NOT committed or pushed yet. A 10-epoch run may stop early (patience 4); the .bat window must stay open (or use the nohup command, which survives a closed terminal).
+
+## [2026-11-17] Demo with AST confirmed working by the user in a browser
+- **Situation:** The user ran `run_demo.bat`; the terminal printed `serving ast (ast)` and the page served normally, and they report recording/uploading worked.
+- **Decision / action taken:** Closes the open caveat "demo web UI with AST not re-tested in a browser". The `You should probably TRAIN this model...` line printed at startup is a harmless transformers notice about the re-initialised 16-class head before the trained weights are loaded.
+- **Concern level:** low
+
+## [2026-11-17] Rare genres: decided to leave as a documented limitation
+- **Situation:** Open question whether to merge or drop Blues, Easy Listening and Soul-RnB (near-zero F1 for most models).
+- **Decision / action taken:** User chose to leave it. No change to the 16-genre task. The limitation stays documented in README and reports/results.md (training counts 13-94 vs 5,681 for Rock; loss weighting, sampling and prior correction did not help; Easy Listening is 0.00 for all models).
+- **Why:** Merging/dropping would change the task and make results incomparable with the current ones; it is not required by the brief.
+- **How to change it:** Revisit later by merging classes in `src/prepare_metadata.py` and retraining, or by using FMA sub-genre labels.
+- **Concern level:** low
+
+## [2026-11-17 21:56] Priority AST run STARTED (2 extra seeds + 10-epoch run)
+- **Situation:** User asked to start the planned AST run now. GPU idle (0 MiB), demo closed, 3.5 GB RAM free.
+- **Decision / action taken:** Launched `scripts/run_ast_seeds.sh` detached (log `logs/ast_seeds.log`, per-run logs `logs/ast_s1_train.log`, `ast_s2_train.log`, `ast_e10_train.log`). Order: `ast_s1` (seed 1) -> `ast_s2` (seed 2) -> `ast_e10` (10 epochs, early-stop patience 4) -> final analysis. All three use the reduced recipe (8 layers frozen, batch 8, all training data). The recipe is identical to the already-tested reduced run apart from seed/epochs, and `train.py` runs its own one-batch smoke test first, so no separate quick test was run.
+- **ETA (estimates, +-15%):** ast_s1 ~23:20, ast_s2 ~00:45, ast_e10 ~05:00, analysis ~05:15 (2026-11-18). Finished marker: `logs/ast_seeds_done`.
+- **How to stop it:** kill the `bash scripts/run_ast_seeds.sh` process and its python child (Task Manager or `taskkill`); rerunning the script resumes and skips finished runs.
+- **Concern level:** low (laptop must stay plugged in/awake; heat throttling may lengthen it)
+
+## 2026-11-18: AST seeds and 10-epoch run results
+- 3 AST seeds (8 frozen, 3 epochs): test macro-F1 0.538/0.531/0.531, spread 0.004 like CNN/MERT, so the AST lead over MERT (+0.038, 95% CI 0.012 to 0.064) is real.
+- 10-epoch run: best val macro-F1 0.559 at epoch 6, then overfit; early stop after epoch 10; test macro-F1 0.510 (0.024 below the 3-epoch recipe, CI -0.046 to -0.002). Concern: single run, so read as "no evidence more epochs help". Decision: keep the 3-epoch recipe as the headline AST result.
+- Concern: the user changed the Windows power plan mid-run (GPU at 817 MHz), adding about 30% to epoch times; no effect on results.

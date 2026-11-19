@@ -24,25 +24,29 @@ CNN (single seed) validation macro-F1 by tau: tau=0.0: 0.463, tau=0.25: 0.442, t
 
 ## Test results
 
-Seed mean ± std is over training seeds. The 95% interval is a bootstrap over the 2572 test tracks (2000 resamples; for multi-seed configs the mean over seeds is bootstrapped), so it reflects test-set sampling noise, not seed noise. AST rows are single runs, so their seed-to-seed variance is unmeasured.
+Seed mean ± std is over training seeds. The 95% interval is a bootstrap over the 2572 test tracks (2000 resamples; for multi-seed configs the mean over seeds is bootstrapped), so it reflects test-set sampling noise, not seed noise. Rows with a single run have unmeasured seed-to-seed variance.
 
 | Configuration | Seeds | Accuracy | Macro-F1 (seed mean ± std) | 95% CI (test tracks) | F1 Blues | F1 Easy Listening | F1 Soul-RnB |
 |---|---|---|---|---|---|---|---|
 | MERT original recipe (inv_sqrt weights, tau=0) | 5 | 0.683 ± 0.004 | 0.496 ± 0.004 | [0.471, 0.517] | 0.000 | 0.000 | 0.178 |
 | CNN original recipe (tau=0) | 4 | 0.673 ± 0.002 | 0.465 ± 0.005 | [0.441, 0.485] | 0.000 | 0.000 | 0.041 |
-| AST reduced (8 layers frozen) | 1 | 0.708 | 0.538 | [0.505, 0.569] | 0.182 | 0.000 | 0.120 |
+| AST reduced (8 layers frozen) | 3 | 0.705 ± 0.003 | 0.533 ± 0.004 | [0.503, 0.561] | 0.161 | 0.000 | 0.106 |
 | AST full fine-tune | 1 | 0.702 | 0.531 | [0.499, 0.559] | 0.167 | 0.000 | 0.080 |
+| AST 10 epochs (8 layers frozen) | 1 | 0.682 | 0.510 | [0.482, 0.533] | 0.000 | 0.000 | 0.143 |
 
 ## Paired differences in macro-F1 (same bootstrap samples)
 
 | Comparison | Difference | 95% CI | Share of resamples > 0 |
 |---|---|---|---|
 | MERT original − CNN original (the headline comparison) | +0.031 | [0.010, 0.050] | 1.00 |
-| AST reduced (8 layers frozen) − MERT original | +0.042 | [0.013, 0.073] | 1.00 |
-| AST reduced (8 layers frozen) − CNN original | +0.073 | [0.042, 0.102] | 1.00 |
+| AST reduced (8 layers frozen) − MERT original | +0.038 | [0.012, 0.064] | 1.00 |
+| AST reduced (8 layers frozen) − CNN original | +0.068 | [0.041, 0.096] | 1.00 |
 | AST full fine-tune − MERT original | +0.035 | [0.008, 0.063] | 1.00 |
 | AST full fine-tune − CNN original | +0.066 | [0.038, 0.094] | 1.00 |
-| AST full fine-tune − AST reduced (8 layers frozen) | -0.007 | [-0.023, 0.009] | 0.18 |
+| AST 10 epochs (8 layers frozen) − MERT original | +0.014 | [-0.007, 0.036] | 0.90 |
+| AST 10 epochs (8 layers frozen) − CNN original | +0.045 | [0.020, 0.068] | 1.00 |
+| AST full fine-tune − AST reduced (8 layers frozen) | -0.003 | [-0.017, 0.012] | 0.37 |
+| AST 10 epochs (8 layers frozen) − AST reduced (8 layers frozen) | -0.024 | [-0.046, -0.002] | 0.01 |
 
 On validation, none of the tested imbalance fixes (other loss weights, class-balanced sampling, post-hoc prior correction) beat the original MERT recipe, so it is the only MERT configuration shown.
 
@@ -50,23 +54,23 @@ For the CNN, post-hoc prior correction did not help on validation (best tau = 0)
 
 ## Per-genre test F1 (mean over seeds)
 
-| Genre | Support | MERT original recipe (inv_sqrt weights, tau=0) | CNN original recipe (tau=0) | AST reduced (8 layers frozen) | AST full fine-tune |
-|---|---|---|---|---|---|
-| Blues | 8 | 0.000 | 0.000 | 0.182 | 0.167 |
-| Classical | 62 | 0.795 | 0.751 | 0.899 | 0.879 |
-| Country | 18 | 0.336 | 0.316 | 0.596 | 0.478 |
-| Easy Listening | 6 | 0.000 | 0.000 | 0.000 | 0.000 |
-| Electronic | 632 | 0.824 | 0.797 | 0.842 | 0.827 |
-| Experimental | 225 | 0.484 | 0.427 | 0.502 | 0.496 |
-| Folk | 152 | 0.334 | 0.377 | 0.391 | 0.387 |
-| Hip-Hop | 220 | 0.816 | 0.767 | 0.822 | 0.818 |
-| Instrumental | 174 | 0.328 | 0.338 | 0.353 | 0.380 |
-| International | 102 | 0.647 | 0.573 | 0.653 | 0.677 |
-| Jazz | 39 | 0.675 | 0.587 | 0.614 | 0.667 |
-| Old-Time / Historic | 51 | 0.953 | 0.927 | 0.971 | 0.981 |
-| Pop | 119 | 0.277 | 0.265 | 0.385 | 0.372 |
-| Rock | 710 | 0.826 | 0.814 | 0.834 | 0.826 |
-| Soul-RnB | 42 | 0.178 | 0.041 | 0.120 | 0.080 |
-| Spoken | 12 | 0.458 | 0.455 | 0.444 | 0.457 |
+| Genre | Support | MERT original recipe (inv_sqrt weights, tau=0) | CNN original recipe (tau=0) | AST reduced (8 layers frozen) | AST full fine-tune | AST 10 epochs (8 layers frozen) |
+|---|---|---|---|---|---|---|
+| Blues | 8 | 0.000 | 0.000 | 0.161 | 0.167 | 0.000 |
+| Classical | 62 | 0.795 | 0.751 | 0.882 | 0.879 | 0.882 |
+| Country | 18 | 0.336 | 0.316 | 0.555 | 0.478 | 0.476 |
+| Easy Listening | 6 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| Electronic | 632 | 0.824 | 0.797 | 0.835 | 0.827 | 0.818 |
+| Experimental | 225 | 0.484 | 0.427 | 0.498 | 0.496 | 0.416 |
+| Folk | 152 | 0.334 | 0.377 | 0.410 | 0.387 | 0.448 |
+| Hip-Hop | 220 | 0.816 | 0.767 | 0.824 | 0.818 | 0.820 |
+| Instrumental | 174 | 0.328 | 0.338 | 0.359 | 0.380 | 0.334 |
+| International | 102 | 0.647 | 0.573 | 0.631 | 0.677 | 0.648 |
+| Jazz | 39 | 0.675 | 0.587 | 0.652 | 0.667 | 0.643 |
+| Old-Time / Historic | 51 | 0.953 | 0.927 | 0.971 | 0.981 | 0.981 |
+| Pop | 119 | 0.277 | 0.265 | 0.381 | 0.372 | 0.324 |
+| Rock | 710 | 0.826 | 0.814 | 0.834 | 0.826 | 0.809 |
+| Soul-RnB | 42 | 0.178 | 0.041 | 0.106 | 0.080 | 0.143 |
+| Spoken | 12 | 0.458 | 0.455 | 0.433 | 0.457 | 0.412 |
 
 _Interpretation: see the notes added to `reports/results.md`._

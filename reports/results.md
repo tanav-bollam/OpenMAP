@@ -60,24 +60,30 @@ Official FMA test split, track level (window probabilities averaged).
 
 ## Model B: AST and the final comparison
 
-AST (fine-tuned AudioSet checkpoint) was trained for 3 epochs in two setups and evaluated once on test.
-Seed means for CNN (4) and MERT (5); AST rows are single runs. Full tables, paired bootstrap intervals and
+AST (fine-tuned AudioSet checkpoint) was trained in several setups and evaluated once on test.
+Seed means for CNN (4), MERT (5) and AST frozen (3); the other AST rows are single runs. Full tables, paired bootstrap intervals and
 per-genre scores: [imbalance_and_uncertainty.md](imbalance_and_uncertainty.md).
 
 | Model | Runs | Top-1 acc | Macro-F1 | 95% CI of macro-F1 (test tracks) |
 |---|---|---|---|---|
 | CNN | 4 seeds | 0.673 ± 0.002 | 0.465 ± 0.005 | [0.441, 0.485] |
 | MERT + head | 5 seeds | 0.683 ± 0.004 | 0.496 ± 0.004 | [0.471, 0.517] |
-| AST, 8 layers frozen | 1 run | 0.708 | 0.538 | [0.505, 0.569] |
-| AST, full fine-tune | 1 run | 0.702 | 0.531 | [0.499, 0.559] |
+| AST, 8 layers frozen, 3 epochs | 3 seeds | 0.705 ± 0.003 | 0.533 ± 0.004 | [0.503, 0.561] |
+| AST, full fine-tune, 3 epochs | 1 run | 0.702 | 0.531 | [0.499, 0.559] |
+| AST, 8 layers frozen, 10 epochs (early stop, best epoch 6) | 1 run | 0.682 | 0.510 | [0.482, 0.533] |
 
-- AST beats MERT by +0.042 (95% CI 0.013 to 0.073; frozen setup) and +0.035 (0.008 to 0.063; full fine-tune), and the CNN
-  by +0.073 and +0.066. Full fine-tuning versus freezing 8 layers: −0.007 (−0.023 to 0.009), i.e. no measurable difference.
-- Where AST gains most over MERT (test F1, frozen setup): Country 0.60 vs 0.34, Classical 0.90 vs 0.80, Pop 0.39 vs 0.28,
-  and it is the only model with a non-zero Blues F1 (0.18; 8 test tracks). Easy Listening stays at 0.00 for every model.
-- Caveats: AST has one run per setting (seed variance unmeasured, and fine-tuned transformers can vary more than the
-  CNN/MERT seeds did), only 3 epochs were run (the brief asked for 10-15), and the validation numbers are 0.576 (frozen) and
-  0.573 (full) macro-F1, optimistic relative to test as for the other models.
+- AST (frozen, 3 seeds pooled) beats MERT by +0.038 (95% CI 0.012 to 0.064) and the CNN by +0.068 (0.041 to 0.096).
+  Full fine-tune − frozen: −0.003 (−0.017 to 0.012), i.e. no measurable difference.
+- Seed variance: the three frozen runs scored 0.538 / 0.531 / 0.531, a spread (0.004) as small as the CNN's and MERT's,
+  so the AST lead over MERT is not a seed accident. This closes the earlier "single run" caveat.
+- Longer training: the 10-epoch run reached its best validation macro-F1 (0.559) at epoch 6, then overfit (train acc 0.86 vs
+  val 0.71); early stopping (patience 4) ended it after epoch 10. Test macro-F1 0.510 is 0.024 lower than the 3-epoch
+  recipe (CI −0.046 to −0.002) and only +0.014 over MERT (−0.007 to 0.036, not clearly better). Single run: the safe
+  conclusion is that more epochs gave no gain here; the 3-epoch schedule (OneCycle compressed to 3 epochs) works well.
+- Where AST gains most over MERT (test F1, frozen setup, seed mean): Country 0.56 vs 0.34, Classical 0.88 vs 0.80, Pop 0.38 vs
+  0.28, and it is the only model with a non-zero Blues F1 (0.16; 8 test tracks). Easy Listening stays at 0.00 for every model.
+- Caveats: the intervals cover test-set sampling plus seeds only for the pooled row; the full fine-tune and 10-epoch rows are
+  single runs, and validation numbers (about 0.57) are optimistic relative to test, as for the other models.
 
 ![AST confusion matrix (8 layers frozen)](figures/ast_confusion_test.png)
 

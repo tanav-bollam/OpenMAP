@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-print("Starting the demo: loading libraries and the model. This can take 20-60 seconds; "
+print("Starting the demo: loading libraries and the model. This can take 1-3 minutes the first time after a restart; "
       "please wait (don't press Ctrl+C) until it says 'Running on local URL'.", flush=True)
 
 import gradio as gr  # noqa: E402

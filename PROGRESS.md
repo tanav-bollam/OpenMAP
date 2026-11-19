@@ -24,3 +24,11 @@ Scope per user: CNN (A) vs MERT (C). AST skipped (code is pluggable; configs/ast
 - [x] T2 Housekeeping done: quick runs + debug logs deleted; zips intentionally kept (see decisions)
 - [x] T3 Error-analysis tests done: H1,H3,H4,H5 supported/consistent, H2 not testable (single-genre subset); see reports/error_analysis_tests.md
 - [x] T4 AST done: reduced (8 layers frozen) test acc 0.708 / macro-F1 0.538; full fine-tune acc 0.702 / 0.531; demo tested; docs updated (reports/results.md, README)
+
+## PRIORITY (planned for tonight, user will start it): AST seeds + longer run
+- [x] 2 extra AST seeds + 10-epoch run DONE 2026-11-18 05:02: AST frozen 3 seeds test macro-F1 0.533 ± 0.004 (lead over MERT +0.038, CI [0.012, 0.064]); 10-epoch run 0.510 (overfit, best epoch 6); README and results.md updated
+- Start with: double-click `run_ast_seeds.bat`, or `nohup bash scripts/run_ast_seeds.sh > logs/ast_seeds.log 2>&1 &` (resumable). Ends by re-running `src/analyze_sweep.py --stage final`, then update README/results.md with the new numbers.
+
+- [x] Browser test of the demo with AST: confirmed working by the user (serving ast)
+
+- [-] Rare genres (merge/drop Blues, Easy Listening, Soul-RnB): decided to leave as a documented limitation

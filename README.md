@@ -14,8 +14,9 @@ official, artist-separated FMA-medium test split:
 |---|---|---|---|
 | A. CNN (from scratch) | 4 seeds | 0.673 ± 0.002 | 0.465 ± 0.005 |
 | C. MERT + head | 5 seeds | 0.683 ± 0.004 | 0.496 ± 0.004 |
-| B. AST, 8 layers frozen | 1 run | **0.708** | **0.538** |
-| B. AST, full fine-tune | 1 run | 0.702 | 0.531 |
+| B. AST, 8 layers frozen, 3 epochs | 3 seeds | **0.705 ± 0.003** | **0.533 ± 0.004** |
+| B. AST, full fine-tune, 3 epochs | 1 run | 0.702 | 0.531 |
+| B. AST, 8 layers frozen, 10 epochs (early-stopped, best epoch 6) | 1 run | 0.682 | 0.510 |
 
 Mean ± std over training seeds. Top-3 accuracy and weighted-F1 (seed 42 / single runs):
 CNN 0.845 / 0.651, MERT 0.846 / 0.680, AST (8 frozen) 0.862 / 0.701, AST (full) 0.856 / 0.695.
@@ -25,10 +26,16 @@ Per-run files are in `outputs/<run>/` (`classification_report_test.txt`, `confus
 
 Honest reading of the numbers:
 - AST is best, then MERT, then the CNN. Paired bootstrap over the test tracks (macro-F1): MERT − CNN +0.031
-  (95% CI 0.010 to 0.050), AST (8 frozen) − MERT +0.042 (0.013 to 0.073), AST (full) − MERT +0.035 (0.008 to 0.063).
-- AST is a single run per setting, so its seed-to-seed variance is unmeasured (the CNN and MERT seed spreads are
-  about 0.005). The intervals cover test-set sampling only. AST ran 3 epochs against the brief's 10-15, and
-  fine-tuning all layers made no measurable difference to freezing 8 (−0.007, 95% CI −0.023 to 0.009).
+  (95% CI 0.010 to 0.050), AST (8 frozen, 3 seeds pooled) − MERT +0.038 (0.012 to 0.064), AST − CNN +0.068
+  (0.041 to 0.096).
+- AST's seed spread (0.004) is as small as for the CNN and MERT, so its lead over MERT is real, not seed luck.
+  The intervals cover test-set sampling only.
+- Training longer did not help: the 10-epoch run peaked on validation at epoch 6 (0.559) and then overfit
+  (train acc 0.86 vs val 0.71), so early stopping picked epoch 6. Its test macro-F1 (0.510) is 0.024 below the
+  3-epoch recipe (95% CI −0.046 to −0.002) and not clearly better than MERT (+0.014, −0.007 to 0.036). This is a
+  single run, so treat it as "no evidence that more epochs help", not as proof they hurt. The 3-epoch OneCycle
+  schedule seems to suit this setup. Fine-tuning all layers also made no measurable difference to freezing 8
+  (−0.003, 95% CI −0.017 to 0.012).
 - Blues, Easy Listening and Soul-RnB are essentially not learned by the CNN and MERT (F1 0.00-0.18); AST reaches
   0.17-0.18 on Blues, but Easy Listening stays at 0.00 for every model (6 test tracks).
   The explanations for the errors were tested ([reports/error_analysis_tests.md](reports/error_analysis_tests.md)):
@@ -73,6 +80,7 @@ python src/evaluate.py outputs/cnn outputs/mert --umap    # writes reports/resul
 python src/train.py --config configs/ast.yaml              # reduced: freeze_layers 8, 3 epochs, all training data
 python src/train.py --config configs/ast.yaml --set run_name=ast_full model.freeze_layers=0
 python src/evaluate.py outputs/ast outputs/ast_full --split test --no-report
+bash scripts/run_ast_seeds.sh                              # 2 extra seeds + 10-epoch run + final analysis (~5-7 h)
 
 # extra analyses
 python src/sweep.py && python src/analyze_sweep.py --stage select && python src/analyze_sweep.py --stage final
@@ -117,6 +125,7 @@ cool-GPU estimate because of heat throttling. The demo serves it through a `wave
   AudioSet transformer is better again; label noise and class imbalance limit all three, more than model
   capacity does (rare genres stay near zero F1 for every model).
 - Freezing 8 of AST's 12 layers made no measurable difference over 3 epochs and was ~1.6x faster.
+- Three AST seeds agree (macro-F1 0.531-0.538); 10 epochs overfit and scored lower than 3.
 - A short timing test on a cool GPU underestimated real epoch time by 1.65x on this laptop.
 - Rare classes dominate macro-F1 and are the least reliable part of the evaluation.
 - On Windows (spawn), idle persistent DataLoader workers each hold ~0.6 GB; on a 15 GB machine this

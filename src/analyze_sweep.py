@@ -163,14 +163,25 @@ def stage_final() -> None:
     if not cnn_same:
         preds[f"CNN selected (tau={tau_cnn})"] = [predict(cp, prior, tau_cnn) for cp in cnn_probs_list]
     print(f"CNN seeds used: {[d.name for d in cnn_dirs]}")
-    # AST runs (single seed each; evaluated on test by their own chains)
+    # AST runs: evaluated on test by their own chains. "reduced" = the original run (outputs/ast) plus any extra
+    # seeds (outputs/ast_s1, ast_s2, ...); the full fine-tune and the 10-epoch run are separate configurations.
     ast_names = []
-    for label, d in {"AST reduced (8 layers frozen)": OUTPUTS / "ast", "AST full fine-tune": OUTPUTS / "ast_full"}.items():
-        if (d / "probs_test.npz").exists():
+    ast_groups = {
+        "AST reduced (8 layers frozen)": [OUTPUTS / "ast", *sorted(OUTPUTS.glob("ast_s[0-9]*"))],
+        "AST full fine-tune": [OUTPUTS / "ast_full"],
+        "AST 10 epochs (8 layers frozen)": [OUTPUTS / "ast_e10"],
+    }
+    for label, dirs in ast_groups.items():
+        dirs = [d for d in dirs if (d / "probs_test.npz").exists()]
+        if not dirs:
+            continue
+        preds[label] = []
+        for d in dirs:
             ap, ay, aids = load_probs(d, "test")
             assert (ay == ref_y).all() and (aids == ref_ids).all(), f"test track order differs for {d.name}"
-            preds[label] = [predict(ap, prior, 0.0)]
-            ast_names.append(label)
+            preds[label].append(predict(ap, prior, 0.0))
+        ast_names.append(label)
+        print(f"{label}: runs used {[d.name for d in dirs]}")
     y, N = ref_y, len(ref_y)
 
     rng = np.random.default_rng(0)
@@ -203,7 +214,7 @@ def stage_final() -> None:
               "## Test results", "",
               "Seed mean ± std is over training seeds. The 95% interval is a bootstrap over the "
               f"{N} test tracks ({N_BOOT} resamples; for multi-seed configs the mean over seeds is bootstrapped), "
-              "so it reflects test-set sampling noise, not seed noise. AST rows are single runs, so their seed-to-seed variance is unmeasured.", "",
+              "so it reflects test-set sampling noise, not seed noise. Rows with a single run have unmeasured seed-to-seed variance.", "",
               "| Configuration | Seeds | Accuracy | Macro-F1 (seed mean ± std) | 95% CI (test tracks) | " +
               " | ".join(f"F1 {g}" for g in rare) + " |", "|---|---|---|---|---|" + "---|" * len(rare)]
     for name, plist in preds.items():
@@ -225,8 +236,10 @@ def stage_final() -> None:
     for a in ast_names:
         pairs.append((f"{a} − MERT original", a, mert_orig))
         pairs.append((f"{a} − CNN original", a, cnn_orig))
-    if len(ast_names) == 2:
-        pairs.append((f"{ast_names[1]} − {ast_names[0]}", ast_names[1], ast_names[0]))
+    red = "AST reduced (8 layers frozen)"
+    for other in ("AST full fine-tune", "AST 10 epochs (8 layers frozen)"):
+        if red in ast_names and other in ast_names:
+            pairs.append((f"{other} − {red}", other, red))
     lines += ["", "## Paired differences in macro-F1 (same bootstrap samples)", "",
               "| Comparison | Difference | 95% CI | Share of resamples > 0 |", "|---|---|---|---|"]
     for label, a, b in pairs:

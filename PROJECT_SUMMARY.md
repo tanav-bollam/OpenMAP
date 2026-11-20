@@ -30,6 +30,15 @@ The audit at the start concluded that AST was risky on this hardware, so the pla
   with batch 32, at most 30 epochs, stopping early on validation macro-F1.
 - Log every decision and concern in `DECISIONS_AND_CONCERNS.md` and run unattended where possible.
 
+Deviations from the brief, all forced by the 6 GB GPU and the time budget:
+
+| Item | Brief | Done |
+|---|---|---|
+| CNN batch size | 64 | 32 (fallback 16) |
+| CNN epochs | 40-60 | at most 30, early stopping on validation macro-F1 |
+| AST epochs | 10-15 | 3, plus one 10-epoch run that overfit |
+| AST batch size | 16-32 | 8, with gradient checkpointing and 8 of 12 layers frozen |
+
 ## 3. What was built
 
 | Stage | What happened |
@@ -109,6 +118,8 @@ To run it: double-click `run_demo.bat`, or `.\.venv\Scripts\python app\demo.py`,
 | 2026-11-17 | Demo fixes, GitHub upload, imbalance sweep and bootstrap intervals, extra CNN seeds, error-analysis tests, AST implemented and evaluated |
 | 2026-11-17 to 18 (overnight) | Two more AST seeds and the 10-epoch run, about 7 hours |
 | 2026-11-18 | Final analysis, docs updated, new web page, final push |
+
+The GitHub repository is public; data and model outputs are not in it (git-ignored).
 
 Git history: `4d58abb` first version, `886a8da` AST, extra seeds and studies, `5a8e7cc` AST seeds and
 10-epoch results, `6d65051` the new web demo.

@@ -2,6 +2,14 @@
 
 Morning report for the autonomous run. Newest entries at the bottom.
 
+> **Current figures (these supersede numbers quoted in older entries below, which are kept as written at the time).**
+> Test set, 2,572 tracks. Seed means: CNN accuracy 0.673 +/- 0.002, macro-F1 0.465 +/- 0.005 (4 seeds); MERT 0.683 +/- 0.004,
+> 0.496 +/- 0.004 (5 seeds); AST (8 layers frozen, 3 epochs) 0.705 +/- 0.003, 0.533 +/- 0.004 (3 seeds). Paired bootstrap on macro-F1:
+> MERT - CNN +0.031 (95% CI 0.010 to 0.050), AST - MERT +0.038 (0.012 to 0.064), AST - CNN +0.068 (0.041 to 0.096).
+> The single-seed numbers quoted in older entries (CNN 0.460, MERT 0.493, AST 0.538, AST - MERT +0.042) are the first seed-42 runs.
+> Repository visibility is now **public** (it was created private; see the entry at the end).
+> Deviations from the brief (batch size, epochs) are listed in the last entry.
+
 ## [2026-11-16 01:05] Hardware is smaller than the brief assumes
 - **Situation:** RTX 3060 Laptop (6 GB), 15 GB RAM, Windows.
 - **Decision / action taken:** Plan is CNN + MERT only; AST dropped per user. DataLoader workers capped at 6 (not cores-2); CNN batch 32 with fallback 16.
@@ -92,7 +100,7 @@ Morning report for the autonomous run. Newest entries at the bottom.
 - **Concern level:** low-medium
 
 ## Final summary
-- **Summary:** Milestones 1-6 and 8-10 done; M7 (AST) skipped by user decision. CNN test macro-F1 0.460, MERT 0.493.
+- **Summary:** Milestones 1-6 and 8-10 done; M7 (AST) skipped by user decision at that time (AST was added later, see below). CNN test macro-F1 0.460, MERT 0.493 (seed-42 runs; seed means are in the box at the top).
 - **Still running:** nothing.
 - **Needs your attention:** rare-genre failure (above); decide whether to try class-imbalance fixes before adding AST; try the demo in a browser (`python app/demo.py`), including the microphone.
 - **Next steps:** (1) AST on days 3-4 via the registry (see README "Adding AST"); (2) several seeds + bootstrap CIs for a fair CNN-vs-MERT comparison; (3) `git init` if you want version control (not a repo yet; nothing committed or pushed).
@@ -118,7 +126,7 @@ Morning report for the autonomous run. Newest entries at the bottom.
 - **Decision / action taken:** Closes the "microphone untested" concern. The demo hint text explains the permission step.
 - **Concern level:** low
 
-## [2026-11-16] Uploaded the project to GitHub (private)
+## [2026-11-16] Uploaded the project to GitHub (private at the time; now public, see the last entry)
 - **Situation:** User asked to commit to GitHub but had not answered the visibility / email / name / license questions.
 - **Decision / action taken:** Created a **private** repository `OpenMAP` under the logged-in `gh` account, pushed branch `main`. Commit identity is repo-local (not global): author name = GitHub login, email = the GitHub noreply address (`ID+login@users.noreply.github.com`), so the user's real email is not published. No LICENSE file. Only source, configs, scripts, README, reports (results.md + 4 small PNG figures), requirements and the decision/progress logs are tracked (~160 KB + ~0.7 MB figures). `.gitignore` excludes `.venv/`, `data/`, `outputs/` (checkpoints, caches, logs), `logs/`. Copied the confusion/UMAP PNGs into `reports/figures/` and fixed their links in `reports/results.md`, because `outputs/` is not tracked.
 - **Why:** Private + noreply + no license are the most conservative, easily reversible defaults.
@@ -184,7 +192,7 @@ Morning report for the autonomous run. Newest entries at the bottom.
 
 ## [2026-11-17 11:55] T4 (AST) finished: full fine-tune result and final comparison
 - **Result:** full fine-tune (`outputs/ast_full`, all layers trainable, 3 epochs, ~40 min/epoch): best val macro-F1 0.573, **test acc 0.702, top-3 0.856, macro-F1 0.531**. Reduced run (`outputs/ast`): test acc 0.708, macro-F1 0.538. Difference full − reduced −0.007 (95% CI −0.023 to 0.009): no measurable gain from unfreezing in 3 epochs.
-- **Final ranking (test macro-F1):** AST 0.531-0.538 > MERT 0.496 ± 0.004 (5 seeds) > CNN 0.465 ± 0.005 (4 seeds). Paired-bootstrap gaps: AST − MERT +0.035 to +0.042 (CIs exclude 0), MERT − CNN +0.031.
+- **Final ranking (test macro-F1):** AST 0.531-0.538 > MERT 0.496 ± 0.004 (5 seeds) > CNN 0.465 ± 0.005 (4 seeds). Paired-bootstrap gaps: AST − MERT +0.035 to +0.042 (CIs exclude 0), MERT − CNN +0.031. (Single-run AST figures; superseded by the 3-seed result: 0.533 ± 0.004, AST − MERT +0.038.)
 - **Docs updated:** README (three-model table, AST section, lessons), reports/results.md (new AST section, AST confusion figure in reports/figures), reports/imbalance_and_uncertainty.md (regenerated). `evaluate.py outputs/... ` without `--no-report` would OVERWRITE reports/results.md (it regenerates it from scratch) - do not run it without backing up the manual sections.
 - **Open caveats:** (1) AST is a single run per setting; seed variance unmeasured. (2) 3 epochs, not the brief's 10-15. (3) Easy Listening is 0.00 for all models (6 test tracks). (4) The demo web UI with AST was not re-tested in a browser (the Predictor path was). (5) The GPU is heat-throttled (84-88 C), so timings in the docs are for this laptop.
 - **Concern level:** low
@@ -197,7 +205,7 @@ Morning report for the autonomous run. Newest entries at the bottom.
 
 ## [2026-11-17] Priority AST run prepared but not started (user will run it tonight)
 - **Decision / action taken:** Wrote `scripts/run_ast_seeds.sh` and `run_ast_seeds.bat` (2 extra seeds of the reduced AST recipe, one 10-epoch run with early-stop patience 4, then the final analysis). Updated `src/analyze_sweep.py` so that AST seeds `outputs/ast_s*` are pooled with `outputs/ast` (seed mean ± std) and `outputs/ast_e10` is its own row; dry-run on the current results passes. Estimated ~7 h total (~1h25 per 3-epoch run, ~4h20 for 10 epochs). Saved as a memory item.
-- **Why:** The user asked to keep this as the priority item. Answers whether AST's lead over MERT (+0.035 to +0.042 macro-F1, single run) is real, and what a longer run gives.
+- **Why:** The user asked to keep this as the priority item. Answers whether AST's lead over MERT (+0.035 to +0.042 macro-F1 in the single run; the 3-seed result is +0.038) is real, and what a longer run gives.
 - **Concern level:** low. These changes are NOT committed or pushed yet. A 10-epoch run may stop early (patience 4); the .bat window must stay open (or use the nohup command, which survives a closed terminal).
 
 ## [2026-11-17] Demo with AST confirmed working by the user in a browser
@@ -228,3 +236,17 @@ Morning report for the autonomous run. Newest entries at the bottom.
 - Replaced the Gradio demo with a custom page (app/web/index.html) served by FastAPI (app/demo.py); old version kept as app/demo_gradio.py. Reason: styling control, no Gradio Windows upload bug, and the page now opens immediately while the model loads in the background (users pressed Ctrl+C during the silent 1-3 minute start).
 - Concern: the microphone path was not tested with a real microphone (uses the browser MediaRecorder and the same decode path as uploads). Page renamed "Music Genre Classifier".
 - Added PROJECT_SUMMARY.md as the one-file overview.
+
+## 2026-11-19: consistency pass, repository visibility, deviations from the brief
+- **Situation:** Documents quoted a mix of single-seed and seed-averaged numbers, `PROGRESS.md` still said AST was skipped, and the repository, created private, is now **public** (checked with `gh repo view`).
+- **Decision / action taken:** Made seed-averaged results the headline everywhere and labelled seed-42 figures as such (`reports/results.md`, this file, `PROGRESS.md`). Checked that tracked files contain no email or personal path; commits use the GitHub noreply address.
+- **Concern:** Because the repo is public, anything pushed is visible to everyone. The data and outputs folders are git-ignored; only code, configs, reports and docs are published. Avoid committing personal details.
+- **Deviations from `PROJECT_BRIEF.md` (all forced by the 6 GB laptop GPU and the time budget):**
+
+| Item | Brief | Done | Why |
+|---|---|---|---|
+| CNN batch size | 64 | 32 (fallback 16) | 6 GB GPU, user decision |
+| CNN epochs | 40-60 | at most 30, early stopping on val macro-F1 | time; the first run used all 30 epochs without early stopping (best at epoch 26) |
+| AST epochs | 10-15 | 3 (plus one 10-epoch run) | about 25 min/epoch on this GPU; the 10-epoch run overfit and scored lower |
+| AST batch size | 16-32 | 8 (gradient checkpointing, 8 of 12 layers frozen) | memory |
+| AST | required | added later as a reduced recipe | hardware audit |

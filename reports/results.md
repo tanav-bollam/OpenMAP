@@ -7,6 +7,10 @@ Official FMA test split, track level (window probabilities averaged).
 | mert | mert_head | 2572 | 0.682 | 0.846 | **0.493** | 0.680 |
 | cnn | cnn | 2572 | 0.671 | 0.845 | **0.460** | 0.651 |
 
+_These two rows, the per-genre table and the confusion matrices below are the original single-seed runs (seed 42).
+The headline numbers are the seed means in the "Model B: AST and the final comparison" section and the README:
+CNN 0.465 ± 0.005 macro-F1 (4 seeds), MERT 0.496 ± 0.004 (5 seeds), AST 0.533 ± 0.004 (3 seeds)._
+
 ## Per-genre F1
 
 | Genre | Support | cnn | mert |
@@ -90,7 +94,7 @@ per-genre scores: [imbalance_and_uncertainty.md](imbalance_and_uncertainty.md).
 ## Error analysis
 
 **Headline.** MERT (frozen embeddings + small head) beats the from-scratch CNN, but only modestly:
-macro-F1 0.493 vs 0.460, accuracy 0.682 vs 0.671, top-3 accuracy essentially equal (0.846 vs 0.845).
+macro-F1 0.493 vs 0.460, accuracy 0.682 vs 0.671, top-3 accuracy essentially equal (0.846 vs 0.845) in the seed-42 runs; the seed means are 0.496 vs 0.465 macro-F1.
 Gains are concentrated in Jazz (+0.15 F1), Hip-Hop (+0.07), International (+0.08), Experimental (+0.07)
 and Country (+0.08). Both models are strong on Old-Time/Historic (0.94), Electronic, Rock, Hip-Hop and
 Classical (0.77-0.83), where the sound is distinctive and training data is plentiful.

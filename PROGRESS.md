@@ -1,15 +1,15 @@
 # Progress (autonomous run; started 2026-11-16 ~01:05)
 
-Scope per user: CNN (A) vs MERT (C). AST skipped (code is pluggable; configs/ast.yaml is a placeholder).
+Scope per user: CNN (A) vs MERT (C) first; AST was skipped at first and then added (see T4 below). Repo visibility: public.
 
 - [x] M1 Environment: .venv (py3.12, CUDA torch, transformers<5), metadata + fma_small extracted, fma_medium download started
 - [x] M1b fma_medium downloaded, SHA1 OK, extracted (25,000 mp3)
 - [x] M2 splits + fma_small cache (7,994/8,000 ok, 6 bad) + sample plot checked (outputs/figures/sample_small.png)
 - [x] M3 CNN end-to-end on fma_small: smoke OK, 3 epochs val macro-F1 0.44, evaluate.py works (logs/cnn_quick.log)
 - [x] M4 Full cache on fma_medium: 24,980 of 25,000 tracks cached in 43 min; 20 bad tracks logged (data/bad_tracks.txt)
-- [x] M5 Full CNN trained on fma_medium: best val macro-F1 0.4635 (ep 26); TEST acc 0.671, top-3 0.845, macro-F1 0.460 (outputs/cnn)
-- [x] M6 MERT: embeddings extracted (24,980), head trained: TEST acc 0.682, top-3 0.846, macro-F1 0.493 (outputs/mert)
-- [-] M7 AST: skipped by user decision (days 3-4); registry + placeholder config ready
+- [x] M5 Full CNN trained on fma_medium: best val macro-F1 0.4635 (ep 26); TEST acc 0.671, top-3 0.845, macro-F1 0.460 (seed 42; 4-seed mean 0.465 +/- 0.005)
+- [x] M6 MERT: embeddings extracted (24,980), head trained: TEST acc 0.682, top-3 0.846, macro-F1 0.493 (seed 42; 5-seed mean 0.496 +/- 0.004)
+- [x] M7 AST: skipped at first by user decision, then implemented on days 3-4 (see T4 and the AST seeds item below)
 - [x] M8 Evaluation report with comparison, confusion matrices, error analysis: reports/results.md
 - [x] M9 Gradio demo tested live via API (auto-picks mert); microphone confirmed working by the user
 - [x] M10 README.md
@@ -23,7 +23,7 @@ Scope per user: CNN (A) vs MERT (C). AST skipped (code is pluggable; configs/ast
 - [x] T1 CNN extra seeds done (4 seeds: test macro-F1 0.465 ± 0.005, acc 0.673 ± 0.002); MERT-CNN gap +0.031, 95% CI [0.010, 0.050] (reports/imbalance_and_uncertainty.md)
 - [x] T2 Housekeeping done: quick runs + debug logs deleted; zips intentionally kept (see decisions)
 - [x] T3 Error-analysis tests done: H1,H3,H4,H5 supported/consistent, H2 not testable (single-genre subset); see reports/error_analysis_tests.md
-- [x] T4 AST done: reduced (8 layers frozen) test acc 0.708 / macro-F1 0.538; full fine-tune acc 0.702 / 0.531; demo tested; docs updated (reports/results.md, README)
+- [x] T4 AST done: reduced (8 layers frozen) test acc 0.708 / macro-F1 0.538 (first run; 3-seed mean 0.705 / 0.533); full fine-tune acc 0.702 / 0.531; demo tested; docs updated (reports/results.md, README)
 
 ## PRIORITY (planned for tonight, user will start it): AST seeds + longer run
 - [x] 2 extra AST seeds + 10-epoch run DONE 2026-11-18 05:02: AST frozen 3 seeds test macro-F1 0.533 ± 0.004 (lead over MERT +0.038, CI [0.012, 0.064]); 10-epoch run 0.510 (overfit, best epoch 6); README and results.md updated

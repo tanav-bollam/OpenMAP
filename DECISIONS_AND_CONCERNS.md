@@ -223,3 +223,8 @@ Morning report for the autonomous run. Newest entries at the bottom.
 - 3 AST seeds (8 frozen, 3 epochs): test macro-F1 0.538/0.531/0.531, spread 0.004 like CNN/MERT, so the AST lead over MERT (+0.038, 95% CI 0.012 to 0.064) is real.
 - 10-epoch run: best val macro-F1 0.559 at epoch 6, then overfit; early stop after epoch 10; test macro-F1 0.510 (0.024 below the 3-epoch recipe, CI -0.046 to -0.002). Concern: single run, so read as "no evidence more epochs help". Decision: keep the 3-epoch recipe as the headline AST result.
 - Concern: the user changed the Windows power plan mid-run (GPU at 817 MHz), adding about 30% to epoch times; no effect on results.
+
+## 2026-11-18: new web demo
+- Replaced the Gradio demo with a custom page (app/web/index.html) served by FastAPI (app/demo.py); old version kept as app/demo_gradio.py. Reason: styling control, no Gradio Windows upload bug, and the page now opens immediately while the model loads in the background (users pressed Ctrl+C during the silent 1-3 minute start).
+- Concern: the microphone path was not tested with a real microphone (uses the browser MediaRecorder and the same decode path as uploads). Page renamed "Music Genre Classifier".
+- Added PROJECT_SUMMARY.md as the one-file overview.

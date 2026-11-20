@@ -119,6 +119,8 @@ layers get gradients when early layers are frozen), same class-weighted label-sm
 `scripts/time_ast.py` measures the step time and picks a time-budgeted setup; real epochs took about 1.65x the
 cool-GPU estimate because of heat throttling. The demo serves it through a `wave` branch.
 
+See [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) for the whole project in one page.
+
 ## Lessons learned
 
 - A from-scratch CNN gets surprisingly close to frozen pretrained embeddings on FMA genres, and a fine-tuned

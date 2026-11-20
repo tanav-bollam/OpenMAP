@@ -32,3 +32,5 @@ Scope per user: CNN (A) vs MERT (C). AST skipped (code is pluggable; configs/ast
 - [x] Browser test of the demo with AST: confirmed working by the user (serving ast)
 
 - [-] Rare genres (merge/drop Blues, Easy Listening, Soul-RnB): decided to leave as a documented limitation
+
+- [x] New web demo (Music Genre Classifier page, FastAPI) replaces Gradio; PROJECT_SUMMARY.md written

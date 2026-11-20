@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Genre Recognition – Results</title>
+<style>
+  :root {
+    --bg: #f6f7fb; --card: #ffffff; --ink: #151a2d; --muted: #5d6580; --line: #e3e6f0;
+    --cnn: #e07a3f; --mert: #3f8fe0; --ast: #7c4de0; --accent: #7c4de0;
+    --shadow: 0 1px 2px rgba(20,26,50,.06), 0 8px 24px rgba(20,26,50,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0e1120; --card: #171b30; --ink: #eef0fa; --muted: #9aa3c4; --line: #272c48;
+            --cnn: #f08f55; --mert: #5aa2f0; --ast: #a07af5; --accent: #a07af5; --shadow: none; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 16px 64px; }
+  header { padding: 56px 0 28px; }
+  .eyebrow { color: var(--accent); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; }
+  h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.15; margin: 8px 0 12px; letter-spacing: -.02em; }
+  .lede { color: var(--muted); max-width: 680px; font-size: 18px; margin: 0; }
+  h2 { font-size: 22px; margin: 44px 0 14px; letter-spacing: -.01em; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); }
+  .card .tag { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .card .big { font-size: 40px; font-weight: 700; letter-spacing: -.02em; margin: 4px 0 0; }
+  .card .sub { color: var(--muted); font-size: 14px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+  .winner { border-color: var(--ast); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ast) 30%, transparent), var(--shadow); }
+  .bars .row { display: grid; grid-template-columns: 150px 1fr 70px; gap: 12px; align-items: center; margin: 14px 0; font-size: 15px; }
+  .track { background: var(--line); border-radius: 999px; height: 14px; position: relative; overflow: hidden; }
+  .fill { height: 100%; border-radius: 999px; }
+  .num { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+  .note { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  td.best { font-weight: 700; color: var(--accent); }
+  td.zero { color: var(--muted); }
+  .scroll { overflow-x: auto; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600;
+          background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+  ul.clean { padding-left: 20px; margin: 8px 0; }
+  ul.clean li { margin: 8px 0; }
+  .two { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  footer { margin-top: 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 20px; }
+  a { color: var(--accent); }
+  @media (max-width: 560px) { .bars .row { grid-template-columns: 1fr 60px; } .bars .row .track { grid-column: 1 / -1; order: 3; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">FMA-medium · 25,000 tracks · 16 genres</div>
+  <h1>Which model recognises music genre best?</h1>
+  <p class="lede">A CNN trained from scratch, a frozen pretrained MERT, and a fine-tuned Audio Spectrogram Transformer (AST), all evaluated once on the same 2,572 test tracks.</p>
+</header>
+
+<section class="grid">
+  <div class="card winner">
+    <div class="tag"><span class="dot" style="background:var(--ast)"></span>AST <span class="pill">best</span></div>
+    <div class="big">0.533</div>
+    <div class="sub">macro-F1 · accuracy 0.705 · 3 seeds</div>
+  </div>
+  <div class="card">
+    <div class="tag"><span class="dot" style="background:var(--mert)"></span>MERT + head</div>
+    <div class="big">0.496</div>
+    <div class="sub">macro-F1 · accuracy 0.683 · 5 seeds</div>
+  </div>
+  <div class="card">
+    <div class="tag"><span class="dot" style="background:var(--cnn)"></span>CNN from scratch</div>
+    <div class="big">0.465</div>
+    <div class="sub">macro-F1 · accuracy 0.673 · 4 seeds</div>
+  </div>
+</section>
+
+<h2>Macro-F1 on the test set</h2>
+<section class="card bars">
+  <div class="row"><span>AST</span><div class="track"><div class="fill" style="width:53.3%;background:var(--ast)"></div></div><span class="num">0.533</span></div>
+  <div class="row"><span>AST, full fine-tune</span><div class="track"><div class="fill" style="width:53.1%;background:var(--ast);opacity:.6"></div></div><span class="num">0.531</span></div>
+  <div class="row"><span>AST, 10 epochs</span><div class="track"><div class="fill" style="width:51%;background:var(--ast);opacity:.4"></div></div><span class="num">0.510</span></div>
+  <div class="row"><span>MERT + head</span><div class="track"><div class="fill" style="width:49.6%;background:var(--mert)"></div></div><span class="num">0.496</span></div>
+  <div class="row"><span>CNN</span><div class="track"><div class="fill" style="width:46.5%;background:var(--cnn)"></div></div><span class="num">0.465</span></div>
+  <p class="note">Bars show the mean over training seeds (AST 3, MERT 5, CNN 4); seed spread is about ±0.004 for each. Macro-F1 weights all 16 genres equally, so rare genres count as much as Rock.</p>
+</section>
+
+<h2>Is the ranking real?</h2>
+<section class="two">
+  <div class="card">
+    <div class="tag">AST − MERT</div>
+    <div class="big">+0.038</div>
+    <div class="sub">95% CI 0.012 to 0.064 · paired bootstrap over test tracks</div>
+  </div>
+  <div class="card">
+    <div class="tag">MERT − CNN</div>
+    <div class="big">+0.031</div>
+    <div class="sub">95% CI 0.010 to 0.050</div>
+  </div>
+</section>
+<p class="note">Both intervals exclude zero, and the three AST seeds agree (0.538, 0.531, 0.531), so the lead is not a lucky seed.</p>
+
+<h2>Where the models differ (test F1 per genre)</h2>
+<section class="card scroll">
+  <table>
+    <thead><tr><th>Genre</th><th>Test tracks</th><th>CNN</th><th>MERT</th><th>AST</th></tr></thead>
+    <tbody>
+      <tr><td>Rock</td><td>710</td><td>0.814</td><td>0.826</td><td class="best">0.834</td></tr>
+      <tr><td>Electronic</td><td>632</td><td>0.797</td><td>0.824</td><td class="best">0.835</td></tr>
+      <tr><td>Hip-Hop</td><td>220</td><td>0.767</td><td>0.816</td><td class="best">0.824</td></tr>
+      <tr><td>Classical</td><td>62</td><td>0.751</td><td>0.795</td><td class="best">0.882</td></tr>
+      <tr><td>Country</td><td>18</td><td>0.316</td><td>0.336</td><td class="best">0.555</td></tr>
+      <tr><td>Pop</td><td>119</td><td>0.265</td><td>0.277</td><td class="best">0.381</td></tr>
+      <tr><td>Soul-RnB</td><td>42</td><td>0.041</td><td class="best">0.178</td><td>0.106</td></tr>
+      <tr><td>Blues</td><td>8</td><td class="zero">0.000</td><td class="zero">0.000</td><td class="best">0.161</td></tr>
+      <tr><td>Easy Listening</td><td>6</td><td class="zero">0.000</td><td class="zero">0.000</td><td class="zero">0.000</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Selected genres; the full 16-genre table is in the report. Best score per row is highlighted.</p>
+</section>
+
+<h2>What we learned</h2>
+<section class="two">
+  <div class="card">
+    <strong>It works</strong>
+    <ul class="clean">
+      <li>Pretraining pays off: AST &gt; MERT &gt; CNN, consistently across seeds.</li>
+      <li>Large, distinctive genres (Rock, Electronic, Hip-Hop, Classical) are recognised well by every model.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <strong>Limits</strong>
+    <ul class="clean">
+      <li>Blues, Easy Listening and Soul-RnB have too few training tracks (13–94) and stay near zero.</li>
+      <li>Training AST for 10 epochs overfit and scored lower than 3 epochs.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  Data: FMA-medium, official artist-separated split. Test set read once per run; model selection on validation only.
+  Full details in <a href="../reports/results.md">reports/results.md</a>.
+</footer>
+
+</div>
+</body>
+</html>

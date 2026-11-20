@@ -86,7 +86,7 @@ bash scripts/run_ast_seeds.sh                              # 2 extra seeds + 10-
 python src/sweep.py && python src/analyze_sweep.py --stage select && python src/analyze_sweep.py --stage final
 python src/error_analysis.py                              # tests of the error-analysis explanations
 
-python app/demo.py                                        # Gradio demo (best evaluated model)
+python app/demo.py                                        # Music Genre Classifier web demo (best evaluated model; opens in your browser)
 # Windows without activating the venv: .\.venv\Scripts\python app\demo.py   (or double-click run_demo.bat)
 ```
 
@@ -136,7 +136,7 @@ cool-GPU estimate because of heat throttling. The demo serves it through a `wave
 
 ```
 configs/  cnn.yaml mert.yaml ast.yaml                 src/  data, models, train, evaluate, extract_mert
-app/demo.py  Gradio demo                               reports/results.md  comparison + error analysis
+app/demo.py  web demo (app/web/index.html); demo_gradio.py = old Gradio version                            reports/results.md  comparison + error analysis
 scripts/run_overnight.sh  end-to-end chain             data/ outputs/ logs/  (gitignored)
 ```
 

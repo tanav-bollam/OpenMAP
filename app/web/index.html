@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Genre Classifier</title>
+<style>
+  :root {
+    --bg: #0b0d1a; --bg2: #14172b; --card: rgba(255,255,255,.05); --line: rgba(255,255,255,.1);
+    --ink: #f2f3fb; --muted: #9aa0c3; --a: #8b5cf6; --b: #22d3ee; --c: #f472b6;
+    --grad: linear-gradient(135deg, var(--a), var(--b));
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f5f6fc; --bg2: #e9ebf8; --card: #ffffffcc; --line: #dfe2f2; --ink: #151a2d; --muted: #5d6580; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; color: var(--ink);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(900px 500px at 15% -10%, color-mix(in srgb, var(--a) 35%, transparent), transparent 60%),
+                radial-gradient(800px 500px at 95% 0%, color-mix(in srgb, var(--b) 25%, transparent), transparent 60%),
+                linear-gradient(var(--bg), var(--bg2)); background-attachment: fixed; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 16px 56px; }
+  nav { display: flex; justify-content: space-between; align-items: center; padding: 22px 0; }
+  .logo { font-weight: 800; letter-spacing: -.02em; font-size: 19px; display: flex; gap: 10px; align-items: center; }
+  .logo i { width: 28px; height: 28px; border-radius: 9px; background: var(--grad); display: inline-block; }
+  .badge { font-size: 13px; color: var(--muted); border: 1px solid var(--line); background: var(--card);
+    padding: 5px 12px; border-radius: 999px; backdrop-filter: blur(8px); }
+  .badge b { color: var(--ink); }
+  .hero { text-align: center; padding: 40px 0 28px; }
+  h1 { font-size: clamp(34px, 6vw, 58px); line-height: 1.08; margin: 0 0 14px; letter-spacing: -.03em; }
+  h1 span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p { color: var(--muted); font-size: 18px; max-width: 560px; margin: 0 auto; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 22px;
+    backdrop-filter: blur(14px); box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  .drop { border: 2px dashed var(--line); border-radius: 18px; padding: 44px 16px; text-align: center; cursor: pointer;
+    transition: .2s; }
+  .drop:hover, .drop.over { border-color: var(--b); background: color-mix(in srgb, var(--b) 8%, transparent); }
+  .drop .icon { width: 56px; height: 56px; border-radius: 16px; background: var(--grad); margin: 0 auto 12px;
+    display: grid; place-items: center; font-size: 26px; color: #fff; }
+  .drop strong { font-size: 18px; }
+  .drop small { display: block; color: var(--muted); margin-top: 4px; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 16px; }
+  button { font: inherit; font-weight: 600; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+    padding: 10px 18px; border-radius: 12px; cursor: pointer; transition: .15s; }
+  button:hover { transform: translateY(-1px); border-color: var(--a); }
+  button.primary { background: var(--grad); border: 0; color: #fff; }
+  #file { display: none; }
+  #result { display: none; margin-top: 22px; }
+  .file { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px;
+    background: var(--card); border: 1px solid var(--line); margin-bottom: 18px; }
+  .file .name { font-weight: 600; word-break: break-all; }
+  .file .meta { color: var(--muted); font-size: 14px; }
+  .grid { display: grid; gap: 18px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+  h3 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .top { font-size: 34px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 4px; }
+  .top small { font-size: 16px; font-weight: 600; color: var(--b); margin-left: 8px; }
+  .bar { margin: 12px 0; }
+  .bar .l { display: flex; justify-content: space-between; font-size: 15px; margin-bottom: 5px; }
+  .bar .t { height: 10px; border-radius: 99px; background: var(--line); overflow: hidden; }
+  .bar .f { height: 100%; width: 0; border-radius: 99px; transition: width .9s cubic-bezier(.2,.8,.2,1); }
+  canvas { width: 100%; height: 190px; border-radius: 14px; display: block; background: #000; image-rendering: auto; }
+  .err { color: #fb7185; font-weight: 600; }
+  .busy { opacity: .55; pointer-events: none; }
+  button.rec { background: #e11d48; border: 0; color: #fff; }
+  .foot { text-align: center; color: var(--muted); font-size: 13px; margin-top: 22px; }
+  .sim { text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <div class="logo"><i></i>Music Genre Classifier</div>
+    <div class="badge" id="badge">Loading model…</div>
+  </nav>
+
+  <section class="hero">
+    <h1>Drop a song.<br><span>Hear its genre.</span></h1>
+    <p>Upload a clip or record from your microphone. The model listens to up to 30 seconds and shows its top three guesses.</p>
+  </section>
+
+  <section class="panel">
+    <div class="drop" id="drop">
+      <div class="icon">♪</div>
+      <strong>Drag an audio file here, or click to browse</strong>
+      <small>MP3, WAV, FLAC, OGG · up to 30 s is analysed</small>
+    </div>
+    <input id="file" type="file" accept="audio/*">
+    <div class="actions">
+      <button class="primary" id="browse">Choose a file</button>
+      <button id="rec">● Record with microphone</button>
+    </div>
+
+    <div id="result">
+      <div class="file">
+        <div style="font-size:26px">🎵</div>
+        <div style="flex:1;min-width:0"><div class="name" id="fname"></div><div class="meta" id="fmeta"></div></div>
+        <audio id="player" controls style="max-width:240px;height:36px"></audio>
+      </div>
+      <div class="grid">
+        <div>
+          <h3>Top guess</h3>
+          <div class="top"><span id="g1"></span><small id="p1"></small></div>
+          <div id="bars"></div>
+        </div>
+        <div>
+          <h3>Spectrogram</h3>
+          <canvas id="spec" width="400" height="128"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="sim" id="status"></div>
+  </section>
+
+</div>
+
+<script>
+const COLORS = ["#8b5cf6","#22d3ee","#f472b6"];
+const $ = id => document.getElementById(id);
+const MAX_SECONDS = 30;
+
+let ready = false;
+function pollInfo(){
+  fetch("/api/info").then(r => r.json()).then(i => {
+    if (i.error) { $("badge").textContent = "Model failed to load"; setStatus("The model failed to load: " + i.error, true); return; }
+    if (!i.ready) { $("badge").textContent = "Loading model…"; setStatus("Loading the model (1–3 minutes the first time after a restart). This page will update by itself."); setTimeout(pollInfo, 2000); return; }
+    ready = true;
+    $("badge").innerHTML = `Model <b>${i.model.toUpperCase()}</b> · ${i.n_genres} genres · FMA-medium`;
+    setStatus("");
+  }).catch(() => { $("badge").textContent = "Server not reachable"; setTimeout(pollInfo, 3000); });
+}
+pollInfo();
+
+function setStatus(msg, isErr){ $("status").textContent = msg || ""; $("status").className = "sim" + (isErr ? " err" : ""); }
+
+function render(data, name, sizeText, url){
+  $("fname").textContent = name;
+  $("fmeta").textContent = sizeText;
+  $("player").src = url;
+  const top = data.top;
+  $("g1").textContent = top[0].genre; $("p1").textContent = (top[0].prob * 100).toFixed(0) + "% confident";
+  $("bars").innerHTML = top.map((t, i) => `<div class="bar"><div class="l"><span>${t.genre}</span><span>${(t.prob*100).toFixed(1)}%</span></div><div class="t"><div class="f" style="background:${COLORS[i]}" data-w="${t.prob*100}"></div></div></div>`).join("");
+  $("result").style.display = "block";
+  requestAnimationFrame(() => requestAnimationFrame(() => document.querySelectorAll(".f").forEach(e => e.style.width = e.dataset.w + "%")));
+  drawSpec(data.spec);
+}
+
+function drawSpec(sp){
+  const cv = $("spec"), ctx = cv.getContext("2d");
+  cv.width = sp.w; cv.height = sp.h;
+  const bin = atob(sp.data), img = ctx.createImageData(sp.w, sp.h);
+  for (let y = 0; y < sp.h; y++) for (let x = 0; x < sp.w; x++){
+    const v = bin.charCodeAt(y * sp.w + x) / 255, row = sp.h - 1 - y;   // low frequencies at the bottom
+    const o = (row * sp.w + x) * 4, hue = 270 - v * 200, l = (6 + v * 62) / 100, a = .9 * Math.min(l, 1 - l);
+    const f = n => { const k = (n + hue / 30) % 12; return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
+    img.data[o] = f(0); img.data[o+1] = f(8); img.data[o+2] = f(4); img.data[o+3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+async function analyse(blob, name){
+  if (!ready) { setStatus("The model is still loading. Please wait until this message disappears.", true); return; }
+  const panel = document.querySelector(".panel");
+  const url = URL.createObjectURL(blob);
+  setStatus("Analysing… the first request can take a few seconds");
+  panel.classList.add("busy");
+  try {
+    const fd = new FormData(); fd.append("file", blob, name);
+    const r = await fetch("/api/predict", { method: "POST", body: fd });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || "Request failed");
+    render(data, name, (blob.size / 1048576).toFixed(1) + " MB", url);
+    setStatus("");
+  } catch (e) {
+    setStatus("Could not process this audio: " + e.message, true);
+  } finally { panel.classList.remove("busy"); }
+}
+
+const pick = f => { if (f) analyse(f, f.name); };
+$("drop").onclick = $("browse").onclick = () => $("file").click();
+$("file").onchange = e => { pick(e.target.files[0]); e.target.value = ""; };
+["dragover","dragenter"].forEach(t => $("drop").addEventListener(t, e => { e.preventDefault(); $("drop").classList.add("over"); }));
+["dragleave","drop"].forEach(t => $("drop").addEventListener(t, e => { e.preventDefault(); $("drop").classList.remove("over"); }));
+$("drop").addEventListener("drop", e => pick(e.dataTransfer.files[0]));
+
+let rec = null, chunks = [], timer = null, t0 = 0;
+async function toggleRecord(){
+  const btn = $("rec");
+  if (rec) { rec.stop(); return; }
+  if (!navigator.mediaDevices || !window.MediaRecorder) { setStatus("This browser cannot record audio.", true); return; }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { setStatus("Microphone blocked. Click the icon left of the address bar, set Microphone to Allow, then reload.", true); return; }
+  chunks = []; rec = new MediaRecorder(stream);
+  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  rec.onstop = () => {
+    clearInterval(timer); stream.getTracks().forEach(t => t.stop());
+    btn.textContent = "● Record with microphone"; btn.classList.remove("rec");
+    const type = rec.mimeType || "audio/webm", ext = type.includes("ogg") ? "ogg" : type.includes("mp4") ? "m4a" : "webm";
+    rec = null;
+    analyse(new Blob(chunks, { type }), "Microphone recording." + ext);
+  };
+  rec.start(); t0 = Date.now(); btn.classList.add("rec"); setStatus("");
+  timer = setInterval(() => {
+    const s = Math.floor((Date.now() - t0) / 1000);
+    btn.textContent = `■ Stop (${s}s)`;
+    if (s >= MAX_SECONDS) rec.stop();
+  }, 250);
+  btn.textContent = "■ Stop (0s)";
+}
+$("rec").onclick = toggleRecord;
+</script>
+</body>
+</html>

@@ -1,4 +1,7 @@
-"""Gradio demo: upload or record a clip, see the top-3 genres and the mel-spectrogram.
+"""Music Genre Classifier web demo: upload or record a clip, see the top-3 genres and the mel-spectrogram.
+
+The page is app/web/index.html (plain HTML/JS); this file serves it with FastAPI and runs the model.
+The previous Gradio version is kept as app/demo_gradio.py.
 
     python app/demo.py                       # uses the run with the best test macro-F1
     python app/demo.py --run outputs/cnn     # force a run (cnn or mert)
@@ -17,59 +20,24 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-print("Starting the demo: loading libraries and the model. This can take 1-3 minutes the first time after a restart; "
-      "please wait (don't press Ctrl+C) until it says 'Running on local URL'.", flush=True)
+from fastapi import FastAPI, File, HTTPException, UploadFile  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
 
-import gradio as gr  # noqa: E402
-import matplotlib  # noqa: E402
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import torch  # noqa: E402
-
-import audio  # noqa: E402
-from models import build_model  # noqa: E402
-
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Heavy libraries (torch, transformers, ...) are imported in a background thread (see load_heavy) so the web
+# page opens immediately and shows "loading" instead of the terminal sitting silent for minutes.
+np = torch = audio = build_model = DEVICE = None
 
 
-def patch_gradio_upload_race() -> None:
-    """Work around a Gradio bug on Windows that floods the terminal with
-    'h11 LocalProtocolError: Too little data for declared Content-Length' after a microphone recording.
+def load_heavy() -> None:
+    global np, torch, audio, build_model, DEVICE
+    import numpy as _np
+    import torch as _torch
 
-    Gradio stores an upload at <cache>/<sha256 of content>/<name>. The recorder uploads the same
-    recording twice, and shutil.move() onto the existing file falls back (on Windows) to copy-over,
-    which truncates the file while the first request is still serving it. Same hash folder means the
-    same bytes, so when the destination already exists we just drop the redundant temp file."""
-    import os
-    import shutil
+    import audio as _audio
+    from models import build_model as _build
 
-    import gradio.routes as gr_routes
-
-    if getattr(gr_routes, "_upload_race_patched", False):
-        return
-
-    def safe_move(files, destinations):
-        for src, dest in zip(files, destinations, strict=False):
-            if os.path.exists(dest):
-                _remove_quietly(src)
-                continue
-            try:
-                shutil.move(src, dest)
-            except OSError:
-                if os.path.exists(dest):  # another request created it first
-                    _remove_quietly(src)
-                else:
-                    raise
-
-    def _remove_quietly(path):
-        try:
-            os.remove(path)
-        except OSError:
-            pass
-
-    gr_routes.move_uploaded_files_to_cache = safe_move
-    gr_routes._upload_race_patched = True
+    np, torch, audio, build_model = _np, _torch, _audio, _build
+    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def pick_run() -> Path:
@@ -105,8 +73,11 @@ class Predictor:
         else:
             raise SystemExit(f"demo does not support data.kind={self.kind!r}")
 
-    @torch.no_grad()
     def __call__(self, path: str):
+        with torch.no_grad():
+            return self._predict(path)
+
+    def _predict(self, path: str):
         y, sr = audio.decode_any(path)
         y = y[: int(30 * sr)]
         if len(y) < 10 * sr:
@@ -145,68 +116,116 @@ class Predictor:
         return probs.cpu().numpy(), mel
 
 
-def make_ui(pred: Predictor):
-    patch_gradio_upload_race()
+WEB = ROOT / "app" / "web"
+MAX_UPLOAD = 60 * 1024 * 1024
 
-    def run(path):
-        if path is None:
-            raise gr.Error("Upload or record an audio clip first.")
+
+def spec_image(mel: np.ndarray, max_cols: int = 400) -> dict:
+    """Log-mel -> small uint8 grid (rows = mel bins, low to high) the page draws on a canvas."""
+    m = mel.astype(np.float32)
+    n = max(1, int(np.ceil(m.shape[1] / max_cols)))
+    cols = m.shape[1] // n * n
+    m = m[:, :cols].reshape(m.shape[0], cols // n, n).mean(-1)
+    lo, hi = np.percentile(m, [2, 99.5])
+    img = np.clip((m - lo) / max(hi - lo, 1e-6), 0, 1)
+    img = (img * 255).astype(np.uint8)
+    import base64
+    return {"w": int(img.shape[1]), "h": int(img.shape[0]), "data": base64.b64encode(img.tobytes()).decode()}
+
+
+def make_app(state: dict):
+    import tempfile
+    import threading
+    import traceback
+
+    app = FastAPI(title="Music Genre Classifier")
+    lock = threading.Lock()  # one prediction at a time on the GPU
+
+    @app.get("/")
+    def index():
+        return FileResponse(WEB / "index.html")
+
+    @app.get("/api/info")
+    def info():
+        pred = state.get("pred")
+        if state.get("error"):
+            return {"ready": False, "error": state["error"]}
+        if pred is None:
+            return {"ready": False}
+        return {"ready": True, "model": pred.cfg["model"]["name"], "run": pred.name, "n_genres": len(pred.genres)}
+
+    @app.post("/api/predict")
+    def predict(file: UploadFile = File(...)):
+        pred = state.get("pred")
+        if pred is None:
+            raise HTTPException(503, "The model is still loading. Wait a moment and try again.")
+        suffix = Path(file.filename or "audio").suffix or ".bin"
+        tmp = None
         try:
-            probs, mel = pred(path)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                tmp = f.name
+                data = file.file.read(MAX_UPLOAD + 1)
+                if len(data) > MAX_UPLOAD:
+                    raise HTTPException(413, "File is too large (limit 60 MB).")
+                f.write(data)
+            with lock:
+                probs, mel = pred(tmp)
+        except HTTPException:
+            raise
         except Exception as e:  # noqa: BLE001
-            # Full traceback goes to the terminal and logs/demo_errors.log; the page shows the message.
-            import traceback
             tb = traceback.format_exc()
             print(tb, flush=True)
             try:
                 (ROOT / "logs").mkdir(exist_ok=True)
-                with open(ROOT / "logs" / "demo_errors.log", "a", encoding="utf-8") as f:
-                    f.write(f"--- {path}\n{tb}\n")
+                with open(ROOT / "logs" / "demo_errors.log", "a", encoding="utf-8") as lf:
+                    lf.write(f"--- {file.filename}\n{tb}\n")
             except OSError:
                 pass
-            raise gr.Error(f"Could not process this audio ({type(e).__name__}: {e})")
+            raise HTTPException(400, f"{type(e).__name__}: {e}")
+        finally:
+            if tmp:
+                try:
+                    Path(tmp).unlink()
+                except OSError:
+                    pass
         top = np.argsort(-probs)[:3]
-        fig, ax = plt.subplots(figsize=(6, 2.2))
-        ax.barh([pred.genres[i] for i in top][::-1], [probs[i] for i in top][::-1], color="#3b6fb6")
-        ax.set_xlim(0, 1)
-        ax.set_xlabel("probability")
-        for k, i in enumerate(top[::-1]):
-            ax.text(min(probs[i] + 0.01, 0.85), k, f"{probs[i]:.1%}", va="center", fontsize=9)
-        fig.tight_layout()
-        fig2, ax2 = plt.subplots(figsize=(6, 3))
-        ax2.imshow(mel, origin="lower", aspect="auto", cmap="magma")
-        ax2.set_xlabel("frame"), ax2.set_ylabel("mel bin"), ax2.set_title("log-mel spectrogram")
-        fig2.tight_layout()
-        return {pred.genres[i]: float(probs[i]) for i in top}, fig, fig2
+        return {"top": [{"genre": pred.genres[i], "prob": float(probs[i])} for i in top], "spec": spec_image(mel)}
 
-    return gr.Interface(
-        fn=run,
-        # format=None: pass recordings through untouched. Gradio's default (format="wav") converts any
-        # non-WAV file on the server with ffmpeg, which fails on machines without it. We decode ourselves.
-        inputs=gr.Audio(sources=["upload", "microphone"], type="filepath", format=None,
-                        label="Audio clip (up to 30 s)"),
-        outputs=[gr.Label(num_top_classes=3, label="Top 3 genres"),
-                 gr.Plot(label="Probabilities"), gr.Plot(label="Spectrogram")],
-        title="Music genre recognition",
-        description=(f"Model: {pred.name}. Trained on FMA-medium ({len(pred.genres)} genres).\n\n"
-                     "Microphone: the browser must allow it for this page. If it says 'No microphone found', "
-                     "click the icon left of the address bar, set Microphone to Allow, and reload."),
-        flagging_mode="never",
-    )
+    return app
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", default=None)
     ap.add_argument("--port", type=int, default=7860)
+    ap.add_argument("--no-browser", action="store_true")
     args = ap.parse_args()
     run_dir = Path(args.run) if args.run else pick_run()
     run_dir = run_dir if run_dir.is_absolute() else ROOT / run_dir
-    pred = Predictor(run_dir)
-    print(f"serving {pred.name}")
-    print(f"Open http://127.0.0.1:{args.port} (use this exact address, not 'localhost'). "
-          "Keep this window open; press Ctrl+C to stop.", flush=True)
-    make_ui(pred).launch(server_name="127.0.0.1", server_port=args.port, inbrowser=True)
+
+    import threading
+    state: dict = {}
+
+    def loader() -> None:
+        try:
+            load_heavy()
+            state["pred"] = Predictor(run_dir)
+            print(f"Model ready: {state['pred'].name}. You can upload or record now.", flush=True)
+        except BaseException as e:  # noqa: BLE001
+            import traceback
+            traceback.print_exc()
+            state["error"] = f"{type(e).__name__}: {e}"
+
+    threading.Thread(target=loader, daemon=True).start()
+    url = f"http://127.0.0.1:{args.port}"
+    print(f"Music Genre Classifier is opening at {url}", flush=True)
+    print("The page opens right away. The model loads in the background (1-3 minutes the first time after a "
+          "restart); the page tells you when it is ready. Keep this window open; press Ctrl+C to stop.", flush=True)
+    if not args.no_browser:
+        import webbrowser
+        threading.Timer(1.5, lambda: webbrowser.open(url)).start()
+    import uvicorn
+    uvicorn.run(make_app(state), host="127.0.0.1", port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":
